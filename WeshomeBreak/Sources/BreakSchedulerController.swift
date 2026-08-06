@@ -1,0 +1,67 @@
+import Foundation
+import GrillBreakCore
+
+/// Owns the `GrillBreakCore.BreakScheduler` for the running app and bridges
+/// it into SwiftUI: drives it with a repeating `Timer` and republishes its
+/// state as `@Published` properties so views update automatically.
+///
+/// The scheduler itself has no notion of timers or observation — this class
+/// is the (thin, UI-layer, untested-by-design per the spec) glue that wires
+/// it into a running app.
+@MainActor
+final class BreakSchedulerController: ObservableObject {
+    @Published private(set) var phase: BreakPhase
+    @Published private(set) var isPaused: Bool
+    @Published private(set) var remaining: TimeInterval
+
+    private let scheduler: BreakScheduler
+    private var timer: Timer?
+
+    init(
+        scheduler: BreakScheduler = BreakScheduler(
+            strategy: SimpleCycleSchedule(workDuration: 20 * 60, breakDuration: 5 * 60)
+        )
+    ) {
+        self.scheduler = scheduler
+        self.phase = scheduler.phase
+        self.isPaused = scheduler.isPaused
+        self.remaining = scheduler.remaining
+        startTicking()
+    }
+
+    deinit {
+        timer?.invalidate()
+    }
+
+    private func startTicking() {
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.tick()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    private func tick() {
+        scheduler.tick()
+        refreshPublishedState()
+    }
+
+    /// Toggles between paused and running, matching the menu bar's single
+    /// "暂停/继续" entry whose label flips based on `isPaused`.
+    func togglePause() {
+        if scheduler.isPaused {
+            scheduler.resume()
+        } else {
+            scheduler.pause()
+        }
+        refreshPublishedState()
+    }
+
+    private func refreshPublishedState() {
+        phase = scheduler.phase
+        isPaused = scheduler.isPaused
+        remaining = scheduler.remaining
+    }
+}

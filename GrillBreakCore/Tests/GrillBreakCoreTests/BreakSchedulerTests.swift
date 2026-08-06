@@ -106,4 +106,70 @@ struct BreakSchedulerTests {
         clock.advance(by: 25 * 60)
         #expect(scheduler.remaining == 0)
     }
+
+    @Test("pausing freezes elapsed time even as the clock keeps advancing")
+    func pausingFreezesElapsed() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.pause()
+        #expect(scheduler.isPaused)
+        #expect(scheduler.elapsed == 5 * 60)
+
+        clock.advance(by: 10 * 60)
+        #expect(scheduler.elapsed == 5 * 60)
+        #expect(scheduler.remaining == 15 * 60)
+    }
+
+    @Test("tick is a no-op while paused, even past the phase duration")
+    func tickIsNoOpWhilePaused() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.pause()
+
+        clock.advance(by: 30 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .working)
+    }
+
+    @Test("resuming picks up elapsed time from where it was paused")
+    func resumingContinuesFromPauseState() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.pause()
+
+        clock.advance(by: 10 * 60)
+        scheduler.resume()
+        #expect(!scheduler.isPaused)
+        #expect(scheduler.elapsed == 5 * 60)
+
+        clock.advance(by: 15 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+    }
+
+    @Test("pausing twice in a row has no additional effect")
+    func pausingTwiceIsIdempotent() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.pause()
+        clock.advance(by: 2 * 60)
+        scheduler.pause()
+
+        #expect(scheduler.elapsed == 5 * 60)
+    }
+
+    @Test("resuming while not paused has no effect")
+    func resumingWithoutPauseIsNoOp() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.resume()
+
+        #expect(!scheduler.isPaused)
+        #expect(scheduler.elapsed == 5 * 60)
+    }
 }
