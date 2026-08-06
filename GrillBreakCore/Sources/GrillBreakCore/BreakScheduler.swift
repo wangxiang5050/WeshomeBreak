@@ -14,6 +14,14 @@ public final class BreakScheduler {
     public private(set) var phase: BreakPhase
     private var phaseStartedAt: Date
 
+    /// Overrides `strategy.duration(for:)` for the *current* phase only.
+    /// Used by `delay(by:)` to make the working phase that stands in for a
+    /// "snoozed rest" last exactly the delay interval, rather than a full
+    /// work duration. Cleared automatically the next time the phase
+    /// transitions (in `advance(to:)`), so it never leaks into a
+    /// subsequent, unrelated phase.
+    private var phaseDurationOverride: TimeInterval?
+
     /// Whether the scheduler is currently frozen. While paused, `tick()`/
     /// `advance(to:)` are no-ops and `elapsed`/`remaining` stay frozen at the
     /// values they held at the moment of pausing, regardless of how much
@@ -37,9 +45,11 @@ public final class BreakScheduler {
         self.phaseStartedAt = clock()
     }
 
-    /// The configured duration of the current phase, per the strategy.
+    /// The configured duration of the current phase: `phaseDurationOverride`
+    /// if one is set (see `delay(by:)`), otherwise the strategy's normal
+    /// duration for this phase.
     public var currentPhaseDuration: TimeInterval {
-        strategy.duration(for: phase)
+        phaseDurationOverride ?? strategy.duration(for: phase)
     }
 
     /// How much time has elapsed since the current phase began, as of `now`.
@@ -77,6 +87,7 @@ public final class BreakScheduler {
             let overflow = now.timeIntervalSince(phaseStartedAt) - currentPhaseDuration
             phase = phase.next
             phaseStartedAt = now.addingTimeInterval(-overflow)
+            phaseDurationOverride = nil
         }
     }
 
@@ -97,5 +108,33 @@ public final class BreakScheduler {
         phaseStartedAt = phaseStartedAt.addingTimeInterval(pauseDuration)
         isPaused = false
         self.pausedAt = nil
+    }
+
+    /// Ends the current rest immediately and starts a fresh, full-length
+    /// working phase right now. The *next* rest will only trigger after a
+    /// complete work duration has elapsed — skipping never shortens a
+    /// future phase. A no-op unless `phase == .resting`.
+    public func skip() {
+        guard phase == .resting else { return }
+        phase = .working
+        phaseStartedAt = clock()
+        phaseDurationOverride = nil
+    }
+
+    /// Ends the current rest immediately, but re-triggers the *same* rest
+    /// (a full break duration, not a shortened one) after `interval` has
+    /// elapsed. Implemented as a working phase whose duration is
+    /// temporarily overridden to `interval` — once that elapses,
+    /// `advance(to:)`'s normal phase transition clears the override and
+    /// resumes the regular working→resting cycle with a full break.
+    ///
+    /// Callable repeatedly with no limit: each call while `phase == .resting`
+    /// pushes the rest back by another `interval`. A no-op unless
+    /// `phase == .resting`.
+    public func delay(by interval: TimeInterval) {
+        guard phase == .resting else { return }
+        phase = .working
+        phaseStartedAt = clock()
+        phaseDurationOverride = interval
     }
 }

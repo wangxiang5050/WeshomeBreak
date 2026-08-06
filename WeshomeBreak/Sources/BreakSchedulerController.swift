@@ -59,6 +59,26 @@ final class BreakSchedulerController: ObservableObject {
         refreshPublishedState()
     }
 
+    /// The default "延迟" duration per the spec: pushes the current rest
+    /// back by 5 minutes. Callers may pass a different interval; this is
+    /// just what the overlay's "延迟" button uses.
+    static let defaultDelayInterval: TimeInterval = 5 * 60
+
+    /// Ends the current rest immediately; the next rest only triggers after
+    /// a full work duration. A no-op unless currently resting.
+    func skipBreak() {
+        scheduler.skip()
+        refreshPublishedState()
+    }
+
+    /// Ends the current rest immediately, re-triggering the same rest after
+    /// `interval` (defaulting to `defaultDelayInterval`). Callable
+    /// repeatedly with no limit. A no-op unless currently resting.
+    func delayBreak(by interval: TimeInterval = defaultDelayInterval) {
+        scheduler.delay(by: interval)
+        refreshPublishedState()
+    }
+
     private func refreshPublishedState() {
         phase = scheduler.phase
         isPaused = scheduler.isPaused

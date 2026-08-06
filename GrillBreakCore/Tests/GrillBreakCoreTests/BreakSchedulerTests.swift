@@ -172,4 +172,88 @@ struct BreakSchedulerTests {
         #expect(!scheduler.isPaused)
         #expect(scheduler.elapsed == 5 * 60)
     }
+
+    @Test("skipping ends the rest immediately and requires a full work duration before the next rest")
+    func skipEndsRestAndRequiresFullWorkDuration() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+
+        clock.advance(by: 1 * 60)
+        scheduler.skip()
+        #expect(scheduler.phase == .working)
+        #expect(scheduler.remaining == 20 * 60)
+
+        clock.advance(by: 19 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .working)
+
+        clock.advance(by: 1 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+    }
+
+    @Test("skip is a no-op while working")
+    func skipIsNoOpWhileWorking() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.skip()
+
+        #expect(scheduler.phase == .working)
+        #expect(scheduler.elapsed == 5 * 60)
+    }
+
+    @Test("delaying re-triggers the same rest after the delay interval, not a full work duration")
+    func delayRetriggersSameRestAfterInterval() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+
+        scheduler.delay(by: 5 * 60)
+        #expect(scheduler.phase == .working)
+        #expect(scheduler.remaining == 5 * 60)
+
+        clock.advance(by: 4 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .working)
+
+        clock.advance(by: 1 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+        #expect(scheduler.remaining == 5 * 60)
+    }
+
+    @Test("delay can be called repeatedly with no limit, each call pushing the rest back further")
+    func delayCanBeCalledRepeatedly() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+
+        for _ in 0..<3 {
+            scheduler.delay(by: 5 * 60)
+            #expect(scheduler.phase == .working)
+
+            clock.advance(by: 5 * 60)
+            scheduler.tick()
+            #expect(scheduler.phase == .resting)
+        }
+    }
+
+    @Test("delay is a no-op while working")
+    func delayIsNoOpWhileWorking() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.delay(by: 5 * 60)
+
+        #expect(scheduler.phase == .working)
+        #expect(scheduler.elapsed == 5 * 60)
+    }
 }

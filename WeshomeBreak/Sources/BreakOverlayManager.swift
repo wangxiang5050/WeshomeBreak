@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+/// A borderless `NSWindow` normally can't become key window, which would
+/// silently swallow clicks on the overlay's skip/delay buttons. Overriding
+/// `canBecomeKey` is what lets `makeKeyAndOrderFront` actually work.
+private final class OverlayWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+}
+
 /// Manages one full-screen `NSWindow` per connected display, each hosting
 /// `BreakOverlayView`. AppKit (not SwiftUI's `Window`/`WindowGroup`) is used
 /// here deliberately: SwiftUI has no API to precisely target "all current
@@ -34,7 +41,7 @@ final class BreakOverlayManager {
         for screen: NSScreen,
         schedulerController: BreakSchedulerController
     ) -> NSWindow {
-        let window = NSWindow(
+        let window = OverlayWindow(
             contentRect: screen.frame,
             styleMask: [.borderless],
             backing: .buffered,
@@ -47,6 +54,7 @@ final class BreakOverlayManager {
         window.hasShadow = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.ignoresMouseEvents = false
+        window.acceptsMouseMovedEvents = true
         // NSWindow defaults to `isReleasedWhenClosed = true`, which makes
         // AppKit autorelease the window itself on `close()` — on top of the
         // strong ARC reference we keep in `windows`, this double-releases
