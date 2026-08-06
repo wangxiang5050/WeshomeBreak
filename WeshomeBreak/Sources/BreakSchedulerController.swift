@@ -64,4 +64,13 @@ final class BreakSchedulerController: ObservableObject {
         isPaused = scheduler.isPaused
         remaining = scheduler.remaining
     }
+
+    /// `remaining` formatted as `mm:ss`, shared by the menu bar status line
+    /// and the break overlay's countdown display.
+    var formattedRemaining: String {
+        let totalSeconds = max(0, Int(remaining.rounded()))
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
 }

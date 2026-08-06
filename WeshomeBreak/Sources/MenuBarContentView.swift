@@ -25,13 +25,6 @@ struct MenuBarContentView: View {
         case .resting: phaseName = "休息中"
         }
         let label = schedulerController.isPaused ? "已暂停" : phaseName
-        return "\(label) · 剩余 \(formattedRemaining)"
-    }
-
-    private var formattedRemaining: String {
-        let totalSeconds = max(0, Int(schedulerController.remaining.rounded()))
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        return "\(label) · 剩余 \(schedulerController.formattedRemaining)"
     }
 }
