@@ -1,0 +1,36 @@
+name: WeshomeBreak
+options:
+  bundleIdPrefix: com.weshome
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: NO
+    MARKETING_VERSION: "0.1.0"
+packages:
+  GrillBreakCore:
+    path: ../GrillBreakCore
+targets:
+  WeshomeBreak:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    info:
+      path: Sources/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleDisplayName: Weshome Break
+    entitlements:
+      path: Sources/WeshomeBreak.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.weshome.break
+        PRODUCT_NAME: "Weshome Break"
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_ENTITLEMENTS: Sources/WeshomeBreak.entitlements
+    dependencies:
+      - package: GrillBreakCore
