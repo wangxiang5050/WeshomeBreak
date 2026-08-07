@@ -37,6 +37,7 @@ struct StaffMelodyResolverTests {
             return
         }
         #expect(musicXML.contains("<score-partwise"))
+        #expect(musicXML == MusicXMLFixtures.simpleFourMeasures)
     }
 
     @Test
@@ -52,9 +53,7 @@ struct StaffMelodyResolverTests {
             return
         }
 
-        let scoreURL = root
-            .appendingPathComponent("scores", isDirectory: true)
-            .appendingPathComponent("\(melody.id.uuidString).musicxml")
+        let scoreURL = root.appendingPathComponent("scores/\(melody.id.uuidString).musicxml")
         try FileManager.default.removeItem(at: scoreURL)
 
         let content = StaffMelodyResolver().resolve(library: library)
