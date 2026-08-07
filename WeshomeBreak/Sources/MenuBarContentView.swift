@@ -11,6 +11,11 @@ struct MenuBarContentView: View {
             schedulerController.togglePause()
         }
 
+        Button("立即开始一次休息") {
+            schedulerController.startBreakNow()
+        }
+        .disabled(schedulerController.phase == .resting || schedulerController.isPaused)
+
         Divider()
 
         Button("退出 App") {

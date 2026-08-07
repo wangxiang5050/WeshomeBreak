@@ -79,6 +79,16 @@ final class BreakSchedulerController: ObservableObject {
         refreshPublishedState()
     }
 
+    /// Manually starts a rest right now, without waiting for the work timer
+    /// to finish. Drives the exact same `phase` transition an automatic
+    /// trigger would, so `BreakOverlayCoordinator`'s phase observation
+    /// presents the overlay via the identical path. A no-op unless
+    /// currently working.
+    func startBreakNow() {
+        scheduler.startBreakNow()
+        refreshPublishedState()
+    }
+
     private func refreshPublishedState() {
         phase = scheduler.phase
         isPaused = scheduler.isPaused

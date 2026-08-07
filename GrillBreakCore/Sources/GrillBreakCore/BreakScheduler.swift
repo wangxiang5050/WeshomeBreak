@@ -137,4 +137,20 @@ public final class BreakScheduler {
         phaseStartedAt = clock()
         phaseDurationOverride = interval
     }
+
+    /// Ends the current work period immediately and starts a fresh,
+    /// full-length rest right now — the same rest an automatic trigger
+    /// would start once the work duration elapsed on its own. The work
+    /// period that follows this rest still runs for a complete,
+    /// unshortened duration, so manually starting a rest early never
+    /// disturbs the schedule beyond this one rest. A no-op unless
+    /// `phase == .working`, and while paused — pausing freezes the overall
+    /// schedule, so a manual trigger must not force a phase change until
+    /// `resume()` is called.
+    public func startBreakNow() {
+        guard phase == .working, !isPaused else { return }
+        phase = .resting
+        phaseStartedAt = clock()
+        phaseDurationOverride = nil
+    }
 }

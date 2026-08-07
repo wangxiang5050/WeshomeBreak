@@ -256,4 +256,67 @@ struct BreakSchedulerTests {
         #expect(scheduler.phase == .working)
         #expect(scheduler.elapsed == 5 * 60)
     }
+
+    @Test("starting a break now ends the work period immediately and starts a full-length rest")
+    func startBreakNowStartsFullLengthRestImmediately() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.startBreakNow()
+
+        #expect(scheduler.phase == .resting)
+        #expect(scheduler.remaining == 5 * 60)
+    }
+
+    @Test("the work period after a manually started break still runs a full, unshortened duration")
+    func startBreakNowDoesNotShortenTheNextWorkPeriod() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.startBreakNow()
+        #expect(scheduler.phase == .resting)
+
+        clock.advance(by: 5 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .working)
+        #expect(scheduler.remaining == 20 * 60)
+
+        clock.advance(by: 19 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .working)
+
+        clock.advance(by: 1 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+    }
+
+    @Test("starting a break now is a no-op while already resting")
+    func startBreakNowIsNoOpWhileResting() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+
+        clock.advance(by: 1 * 60)
+        scheduler.startBreakNow()
+
+        #expect(scheduler.phase == .resting)
+        #expect(scheduler.remaining == 4 * 60)
+    }
+
+    @Test("starting a break now is a no-op while paused, leaving the frozen state untouched")
+    func startBreakNowIsNoOpWhilePaused() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.pause()
+
+        clock.advance(by: 2 * 60)
+        scheduler.startBreakNow()
+
+        #expect(scheduler.phase == .working)
+        #expect(scheduler.isPaused)
+        #expect(scheduler.elapsed == 5 * 60)
+    }
 }
