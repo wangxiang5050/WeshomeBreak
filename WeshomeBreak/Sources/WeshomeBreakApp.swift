@@ -10,7 +10,7 @@ struct WeshomeBreakApp: App {
 
     init() {
         let settingsStore = BreakSettingsStore()
-        let sceneModes: [BreakSceneMode] = [StaffNotesSceneMode()]
+        let sceneModes: [BreakSceneMode] = [PlaceholderSceneMode()]
         let controller = BreakSchedulerController(settingsStore: settingsStore)
 
         _settingsStore = StateObject(wrappedValue: settingsStore)
