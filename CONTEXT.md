@@ -1,0 +1,57 @@
+# Weshome Break
+
+Menu-bar macOS app that enforces work/break cycles with a full-screen rest overlay and pluggable break scene visuals.
+
+## Language
+
+**Break Scene Mode**:
+A pluggable visual presentation shown on the rest overlay during a break.
+_Avoid_: effect, theme, screensaver (unless clearly metaphorical)
+
+**Staff Melody Scene**:
+The break scene mode that shows a readable, musically correct staff notation of a **User Melody** so the user can hum along while resting.
+_Avoid_: staff-notes decoration, random phrase, ambient notes (those describe the superseded decorative behavior)
+
+**User Melody**:
+A melody the user provides for display on the Staff Melody Scene. Product-bundled melodies are not a required content source.
+_Avoid_: song (implies lyrics/arrangement), track, random phrase
+
+**Melody Entry**:
+The process of getting a User Melody into the app. Phase 1 is offline conversion into a stored score file, then import; later phases may add in-app image capture.
+_Avoid_: OCR-only wording when the phase is still manual/tool-assisted import
+
+**Staff Melody (v1 scope)**:
+A monophonic staff excerpt intended to fit roughly 4–8 measures (more than 8 is allowed with a warning). Includes clef (treble or bass, including mid-excerpt clef/key changes), time signature, key signature, pitches with accidentals, durations (including dotted values), common triplets, rests, barlines, beams, and ties. No polyphony, chords, lyrics, slurs, nested tuplets, or non-triplet tuplet ratios. Import accepts only a single part and a single voice; files outside this subset are rejected entirely.
+_Avoid_: full score, arrangement, song sheet
+
+**Beam (连梁)**:
+The horizontal stroke that joins consecutive short notes (e.g. eighth notes) into a group. Not the same as a tie or slur.
+_Avoid_: 连音线 (ambiguous colloquial term)
+
+**Tie (延音线)**:
+A curved mark joining two notes of the same pitch so their durations add.
+_Avoid_: slur, beam
+
+**Slur (圆滑线)**:
+A curved mark grouping different pitches for phrasing; does not change duration. Out of v1 scope.
+_Avoid_: tie, beam
+
+**Tuplet (连音符)**:
+A rhythm grouping that fits a non-standard count into a duration. v1 allows common triplets only (e.g. three eighths in the time of one beat); nested tuplets and other ratios are out of scope.
+_Avoid_: 连音线 (ambiguous), beam
+
+**Stored Score (MusicXML)**:
+The Phase 1 on-disk form of a User Melody: MusicXML (`.musicxml` / `.mxl`), produced offline via Audiveris (image→MusicXML) and/or MuseScore (proof/edit/export), then imported into the app.
+_Avoid_: ABC, custom JSON, LilyPond as the app’s source of truth (unless a future decision replaces MusicXML)
+
+**Score Rendering (Verovio)**:
+Phase 1 displays accepted MusicXML by engraving with Verovio (SVG), not a from-scratch staff Canvas renderer.
+_Avoid_: treating Verovio as a reason to skip the import subset gate
+
+**Melody Library**:
+The set of imported User Melodies available to the Staff Melody Scene. Empty library shows an actionable empty state on the overlay (countdown still runs).
+_Avoid_: playlist, catalog (unless UI copy)
+
+**Melody Selection**:
+Which User Melody from the Melody Library is shown on the next Staff Melody Scene. v1 is manual pick of one melody; later strategies (e.g. random) may extend this. Distinct from **Scene Mode Selection** (which Break Scene Mode to show).
+_Avoid_: mode selection, scene selection (those refer to Break Scene Mode)
