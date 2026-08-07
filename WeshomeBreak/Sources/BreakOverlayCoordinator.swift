@@ -21,7 +21,7 @@ final class BreakOverlayCoordinator {
         schedulerController: BreakSchedulerController,
         settingsStore: BreakSettingsStore,
         overlayManager: BreakOverlayManager? = nil,
-        sceneModeRegistry: BreakSceneModeRegistry = BreakSceneModeRegistry(modes: [PlaceholderSceneMode()])
+        sceneModeRegistry: BreakSceneModeRegistry
     ) {
         self.schedulerController = schedulerController
         self.settingsStore = settingsStore

@@ -10,7 +10,10 @@ struct WeshomeBreakApp: App {
 
     init() {
         let settingsStore = BreakSettingsStore()
-        let sceneModes: [BreakSceneMode] = [PlaceholderSceneMode()]
+        let melodyLibrary = MelodyLibrary(rootDirectory: AppPaths.melodyLibraryRoot)
+        let sceneModes: [BreakSceneMode] = [
+            StaffMelodySceneMode(library: melodyLibrary)
+        ]
         let controller = BreakSchedulerController(settingsStore: settingsStore)
 
         _settingsStore = StateObject(wrappedValue: settingsStore)
