@@ -27,7 +27,8 @@ final class BreakSchedulerController: ObservableObject {
             strategy: SimpleCycleSchedule(
                 workDuration: settingsStore.workDuration,
                 breakDuration: settingsStore.breakDuration
-            )
+            ),
+            interruptionSource: SystemBreakInterruptionSource()
         )
         self.phase = self.scheduler.phase
         self.isPaused = self.scheduler.isPaused

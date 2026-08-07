@@ -10,9 +10,16 @@ import Foundation
 public final class BreakScheduler {
     private var strategy: ScheduleStrategy
     private let clock: () -> Date
+    private let interruptionSource: BreakInterruptionSource
 
     public private(set) var phase: BreakPhase
     private var phaseStartedAt: Date
+
+    /// `true` while an automatic transition into `.resting` is being held
+    /// back because `interruptionSource` reports a full-screen app or Do Not
+    /// Disturb/Focus is currently active. Cleared the moment the condition
+    /// resolves and the postponed rest actually starts. See `advance(to:)`.
+    public private(set) var isRestPending: Bool = false
 
     /// Overrides `strategy.duration(for:)` for the *current* phase only.
     /// Used by `delay(by:)` to make the working phase that stands in for a
@@ -34,14 +41,20 @@ public final class BreakScheduler {
     ///   - startingPhase: The phase the scheduler begins in. Defaults to `.working`.
     ///   - clock: Supplies the current time. Defaults to the system clock;
     ///     tests should inject a controllable clock instead.
+    ///   - interruptionSource: Consulted only when the scheduler is about to
+    ///     transition from `.working` into `.resting`. Defaults to a source
+    ///     that never postpones anything; apps inject a system-backed
+    ///     implementation, tests inject a stub.
     public init(
         strategy: ScheduleStrategy,
         startingPhase: BreakPhase = .working,
-        clock: @escaping () -> Date = Date.init
+        clock: @escaping () -> Date = Date.init,
+        interruptionSource: BreakInterruptionSource = NoInterruptionSource()
     ) {
         self.strategy = strategy
         self.phase = startingPhase
         self.clock = clock
+        self.interruptionSource = interruptionSource
         self.phaseStartedAt = clock()
     }
 
@@ -81,13 +94,31 @@ public final class BreakScheduler {
     /// scheduler backed by a fake `clock` closure can call `advance(to:)`
     /// with any future `Date` and observe the resulting phase. A no-op while
     /// paused — the phase never advances during a pause.
+    ///
+    /// The one exception to "elapsed the duration means transition" is the
+    /// working→resting edge: if `interruptionSource` reports a full-screen
+    /// app or Do Not Disturb/Focus active right when the work duration
+    /// elapses, the transition is held back (`isRestPending` becomes
+    /// `true`) instead of presenting a break. Every subsequent call
+    /// re-checks the source; the moment it reports clear, the postponed
+    /// rest starts immediately with a full, fresh duration — never
+    /// shortened by however long the postponement lasted.
     public func advance(to now: Date) {
         guard !isPaused else { return }
         while now.timeIntervalSince(phaseStartedAt) >= currentPhaseDuration {
+            if phase == .working, interruptionSource.isInterrupting() {
+                isRestPending = true
+                return
+            }
             let overflow = now.timeIntervalSince(phaseStartedAt) - currentPhaseDuration
             phase = phase.next
-            phaseStartedAt = now.addingTimeInterval(-overflow)
             phaseDurationOverride = nil
+            if isRestPending {
+                phaseStartedAt = now
+                isRestPending = false
+            } else {
+                phaseStartedAt = now.addingTimeInterval(-overflow)
+            }
         }
     }
 
@@ -151,6 +182,7 @@ public final class BreakScheduler {
         guard phase == .working, !isPaused else { return }
         phase = .resting
         phaseStartedAt = clock()
+        isRestPending = false
         phaseDurationOverride = nil
     }
 
