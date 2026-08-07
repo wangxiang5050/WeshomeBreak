@@ -1,4 +1,5 @@
 import AppKit
+import GrillBreakCore
 import SwiftUI
 
 /// A borderless `NSWindow` normally can't become key window, which would
@@ -22,11 +23,11 @@ final class BreakOverlayManager {
     /// Creates and shows one overlay window per screen currently connected.
     /// Calling this while overlays are already presented has no effect —
     /// call `dismiss()` first if you need to re-present.
-    func present(schedulerController: BreakSchedulerController) {
+    func present(schedulerController: BreakSchedulerController, sceneMode: BreakSceneMode) {
         guard windows.isEmpty else { return }
 
         windows = NSScreen.screens.map { screen in
-            makeWindow(for: screen, schedulerController: schedulerController)
+            makeWindow(for: screen, schedulerController: schedulerController, sceneMode: sceneMode)
         }
         windows.forEach { $0.makeKeyAndOrderFront(nil) }
     }
@@ -39,7 +40,8 @@ final class BreakOverlayManager {
 
     private func makeWindow(
         for screen: NSScreen,
-        schedulerController: BreakSchedulerController
+        schedulerController: BreakSchedulerController,
+        sceneMode: BreakSceneMode
     ) -> NSWindow {
         let window = OverlayWindow(
             contentRect: screen.frame,
@@ -63,7 +65,7 @@ final class BreakOverlayManager {
         // lifetime exclusively through `windows`, so opt out.
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(
-            rootView: BreakOverlayView(schedulerController: schedulerController)
+            rootView: BreakOverlayView(schedulerController: schedulerController, sceneMode: sceneMode)
         )
         return window
     }

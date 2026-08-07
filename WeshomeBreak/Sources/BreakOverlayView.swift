@@ -1,15 +1,13 @@
+import GrillBreakCore
 import SwiftUI
 
-/// Placeholder content for the full-screen break overlay.
-///
-/// This is intentionally *not* the final "音符沿五线谱飘入" visual — that
-/// lives behind the `BreakSceneMode` protocol and lands in a later ticket.
-/// For now this just proves the overlay window mechanics work end to end:
-/// dark background, remaining-time countdown in the corner, plus the
-/// skip/delay control bar that stays hidden until the mouse moves — like a
-/// video player's controls — so it never distracts from the break visual.
+/// The full-screen break overlay's content: the current `BreakSceneMode`'s
+/// visual filling the screen, a remaining-time countdown in the corner, and
+/// a skip/delay control bar that stays hidden until the mouse moves — like
+/// a video player's controls — so it never distracts from the break visual.
 struct BreakOverlayView: View {
     @ObservedObject var schedulerController: BreakSchedulerController
+    let sceneMode: BreakSceneMode
 
     /// Whether the skip/delay control bar is currently visible. Flips to
     /// `true` on any mouse movement over the overlay, then automatically
@@ -22,17 +20,8 @@ struct BreakOverlayView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
-
-            VStack(spacing: 16) {
-                Text("休息一下")
-                    .font(.system(size: 40, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("放松片刻,马上回来")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            sceneMode.makeView()
+                .ignoresSafeArea()
 
             Text(schedulerController.formattedRemaining)
                 .font(.system(size: 22, weight: .medium, design: .monospaced))
