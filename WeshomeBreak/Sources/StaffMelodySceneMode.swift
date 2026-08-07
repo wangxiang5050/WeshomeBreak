@@ -30,7 +30,10 @@ struct StaffMelodySceneView: View {
                 emptyState
             case .score(let musicXML):
                 VerovioScoreView(musicXML: musicXML)
-                    .padding(24)
+                    .padding(32)
+                    .background(Color.white.opacity(0.96))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .padding(40)
             case .failed(let message):
                 messageState(message)
             }
@@ -39,12 +42,12 @@ struct StaffMelodySceneView: View {
     }
 
     private var background: some View {
-        // Phase 1 accepts near-default Verovio print look; soft grey frame
-        // keeps the staff readable without the deferred dark-theme polish.
+        // Dark surround keeps the overlay countdown (white) readable; the
+        // Verovio SVG itself stays on a light print-style surface (ADR Phase 1).
         LinearGradient(
             colors: [
-                Color(red: 0.93, green: 0.93, blue: 0.94),
-                Color(red: 0.88, green: 0.89, blue: 0.91)
+                Color(red: 0.04, green: 0.05, blue: 0.08),
+                Color(red: 0.08, green: 0.09, blue: 0.12)
             ],
             startPoint: .top,
             endPoint: .bottom
@@ -55,10 +58,10 @@ struct StaffMelodySceneView: View {
         VStack(spacing: 12) {
             Text("还没有可哼唱的旋律")
                 .font(.system(size: 28, weight: .medium))
-                .foregroundStyle(.primary.opacity(0.85))
+                .foregroundStyle(.white.opacity(0.85))
             Text("请先在设置中导入旋律")
                 .font(.system(size: 18, weight: .regular))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.55))
         }
         .multilineTextAlignment(.center)
         .padding(40)
@@ -67,7 +70,7 @@ struct StaffMelodySceneView: View {
     private func messageState(_ message: String) -> some View {
         Text(message)
             .font(.system(size: 20, weight: .regular))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.white.opacity(0.6))
             .multilineTextAlignment(.center)
             .padding(40)
     }

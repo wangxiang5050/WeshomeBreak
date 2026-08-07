@@ -14,6 +14,8 @@ public enum StaffMelodyContent: Equatable, Sendable {
 /// Engraving (MusicXML → SVG) happens in the app via Verovio; this type only
 /// decides empty / score / failed.
 public struct StaffMelodyResolver: Sendable {
+    private static let readFailureMessage = "无法读取旋律，请在设置中重新导入。"
+
     public init() {}
 
     public func resolve(library: MelodyLibrary) -> StaffMelodyContent {
@@ -24,11 +26,11 @@ public struct StaffMelodyResolver: Sendable {
         do {
             let musicXML = try library.musicXML(for: melody.id)
             if musicXML.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return .failed(message: "无法读取旋律，请在设置中重新导入。")
+                return .failed(message: Self.readFailureMessage)
             }
             return .score(musicXML: musicXML)
         } catch {
-            return .failed(message: "无法读取旋律，请在设置中重新导入。")
+            return .failed(message: Self.readFailureMessage)
         }
     }
 }
