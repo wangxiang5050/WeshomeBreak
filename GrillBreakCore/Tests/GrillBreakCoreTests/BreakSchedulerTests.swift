@@ -319,4 +319,39 @@ struct BreakSchedulerTests {
         #expect(scheduler.isPaused)
         #expect(scheduler.elapsed == 5 * 60)
     }
+
+    @Test("updating the strategy immediately changes the current phase's remaining time")
+    func updatingStrategyAffectsCurrentPhaseImmediately() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.updateStrategy(SimpleCycleSchedule(workDuration: 30 * 60, breakDuration: 5 * 60))
+
+        #expect(scheduler.remaining == 25 * 60)
+    }
+
+    @Test("updating the strategy changes the duration used once the next phase starts")
+    func updatingStrategyAffectsSubsequentPhases() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        scheduler.updateStrategy(SimpleCycleSchedule(workDuration: 20 * 60, breakDuration: 10 * 60))
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+        #expect(scheduler.remaining == 10 * 60)
+    }
+
+    @Test("updating the strategy while a delay override is active leaves the override in place")
+    func updatingStrategyDoesNotClearAnActiveDelayOverride() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        scheduler.delay(by: 3 * 60)
+        #expect(scheduler.remaining == 3 * 60)
+
+        scheduler.updateStrategy(SimpleCycleSchedule(workDuration: 99 * 60, breakDuration: 5 * 60))
+        #expect(scheduler.remaining == 3 * 60)
+    }
 }

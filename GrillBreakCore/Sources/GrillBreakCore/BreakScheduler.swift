@@ -153,4 +153,16 @@ public final class BreakScheduler {
         phaseStartedAt = clock()
         phaseDurationOverride = nil
     }
+
+    /// Swaps in a new scheduling model, e.g. after the user changes work/rest
+    /// durations in settings. Takes effect immediately: since
+    /// `currentPhaseDuration` always reads through to `strategy.duration(for:)`
+    /// rather than caching it at phase start, the currently running phase's
+    /// `remaining` reflects the new duration right away, and every phase from
+    /// here on (including the very next transition) uses it too. Does not
+    /// touch `phaseDurationOverride` — an in-progress `delay(by:)` override
+    /// is left intact until its own phase transition clears it.
+    public func updateStrategy(_ newStrategy: ScheduleStrategy) {
+        strategy = newStrategy
+    }
 }

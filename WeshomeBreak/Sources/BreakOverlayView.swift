@@ -8,6 +8,7 @@ import SwiftUI
 struct BreakOverlayView: View {
     @ObservedObject var schedulerController: BreakSchedulerController
     let sceneMode: BreakSceneMode
+    @ObservedObject var settingsStore: BreakSettingsStore
 
     /// Whether the skip/delay control bar is currently visible. Flips to
     /// `true` on any mouse movement over the overlay, then automatically
@@ -29,10 +30,12 @@ struct BreakOverlayView: View {
                 .padding(24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
 
-            controlBar
-                .opacity(isControlBarVisible ? 1 : 0)
-                .allowsHitTesting(isControlBarVisible)
-                .animation(.easeInOut(duration: 0.2), value: isControlBarVisible)
+            if settingsStore.allowSkip || settingsStore.allowDelay {
+                controlBar
+                    .opacity(isControlBarVisible ? 1 : 0)
+                    .allowsHitTesting(isControlBarVisible)
+                    .animation(.easeInOut(duration: 0.2), value: isControlBarVisible)
+            }
         }
         .onContinuousHover { phase in
             if case .active = phase {
@@ -43,11 +46,15 @@ struct BreakOverlayView: View {
 
     private var controlBar: some View {
         HStack(spacing: 16) {
-            Button("跳过本次休息") {
-                schedulerController.skipBreak()
+            if settingsStore.allowSkip {
+                Button("跳过本次休息") {
+                    schedulerController.skipBreak()
+                }
             }
-            Button("延迟休息") {
-                schedulerController.delayBreak()
+            if settingsStore.allowDelay {
+                Button("延迟休息") {
+                    schedulerController.delayBreak()
+                }
             }
         }
         .buttonStyle(.bordered)

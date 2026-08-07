@@ -15,22 +15,48 @@ final class BreakSchedulerController: ObservableObject {
     @Published private(set) var remaining: TimeInterval
 
     private let scheduler: BreakScheduler
+    private let settingsStore: BreakSettingsStore
     private var timer: Timer?
 
     init(
-        scheduler: BreakScheduler = BreakScheduler(
-            strategy: SimpleCycleSchedule(workDuration: 20 * 60, breakDuration: 5 * 60)
-        )
+        scheduler: BreakScheduler? = nil,
+        settingsStore: BreakSettingsStore
     ) {
-        self.scheduler = scheduler
-        self.phase = scheduler.phase
-        self.isPaused = scheduler.isPaused
-        self.remaining = scheduler.remaining
+        self.settingsStore = settingsStore
+        self.scheduler = scheduler ?? BreakScheduler(
+            strategy: SimpleCycleSchedule(
+                workDuration: settingsStore.workDuration,
+                breakDuration: settingsStore.breakDuration
+            )
+        )
+        self.phase = self.scheduler.phase
+        self.isPaused = self.scheduler.isPaused
+        self.remaining = self.scheduler.remaining
         startTicking()
+
+        settingsStore.onDurationChange = { [weak self] in
+            self?.applyScheduleSettings()
+        }
     }
 
     deinit {
         timer?.invalidate()
+    }
+
+    /// Re-derives the scheduler's strategy from the settings store's current
+    /// work/rest durations. Called once up front isn't necessary — the
+    /// scheduler is already constructed with those values — this only fires
+    /// on subsequent changes, via `settingsStore.onChange`. Takes effect
+    /// immediately, including on whichever phase is currently running (see
+    /// `BreakScheduler.updateStrategy(_:)`).
+    private func applyScheduleSettings() {
+        scheduler.updateStrategy(
+            SimpleCycleSchedule(
+                workDuration: settingsStore.workDuration,
+                breakDuration: settingsStore.breakDuration
+            )
+        )
+        refreshPublishedState()
     }
 
     private func startTicking() {
@@ -59,23 +85,22 @@ final class BreakSchedulerController: ObservableObject {
         refreshPublishedState()
     }
 
-    /// The default "延迟" duration per the spec: pushes the current rest
-    /// back by 5 minutes. Callers may pass a different interval; this is
-    /// just what the overlay's "延迟" button uses.
-    static let defaultDelayInterval: TimeInterval = 5 * 60
-
     /// Ends the current rest immediately; the next rest only triggers after
-    /// a full work duration. A no-op unless currently resting.
+    /// a full work duration. A no-op unless currently resting, or skipping
+    /// is disallowed in settings.
     func skipBreak() {
+        guard settingsStore.allowSkip else { return }
         scheduler.skip()
         refreshPublishedState()
     }
 
     /// Ends the current rest immediately, re-triggering the same rest after
-    /// `interval` (defaulting to `defaultDelayInterval`). Callable
-    /// repeatedly with no limit. A no-op unless currently resting.
-    func delayBreak(by interval: TimeInterval = defaultDelayInterval) {
-        scheduler.delay(by: interval)
+    /// `interval` (defaulting to the settings panel's configured delay
+    /// length). Callable repeatedly with no limit. A no-op unless currently
+    /// resting, or delaying is disallowed in settings.
+    func delayBreak(by interval: TimeInterval? = nil) {
+        guard settingsStore.allowDelay else { return }
+        scheduler.delay(by: interval ?? settingsStore.delayInterval)
         refreshPublishedState()
     }
 

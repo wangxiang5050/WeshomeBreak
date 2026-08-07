@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MenuBarContentView: View {
     @ObservedObject var schedulerController: BreakSchedulerController
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Text(statusLine)
@@ -15,6 +16,13 @@ struct MenuBarContentView: View {
             schedulerController.startBreakNow()
         }
         .disabled(schedulerController.phase == .resting || schedulerController.isPaused)
+
+        Divider()
+
+        Button("设置…") {
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "settings")
+        }
 
         Divider()
 
