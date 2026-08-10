@@ -44,6 +44,21 @@ struct StaffMelodyEngravingPageTests {
 
         #expect(html.contains("scale: 60"))
         #expect(html.contains("breaks: \"encoded\""))
+        #expect(html.contains("pageWidth: 1200"))
         #expect(!html.contains("scale: 40"))
+    }
+
+    @Test
+    func htmlScalesNotationToFillSceneWidth() {
+        let html = StaffMelodyEngravingPage.html(musicXML: "<score-partwise/>")
+
+        // max-width alone never scales UP — small Verovio SVGs stay tiny and
+        // four-bar systems look unchanged. Force full-width display on the SVG.
+        let svgRuleStart = html.range(of: "#notation svg {")
+        #expect(svgRuleStart != nil)
+        let afterRule = html[svgRuleStart!...]
+        let nextRule = afterRule.range(of: "\n            /*") ?? afterRule.range(of: "#notation svg *")
+        let rule = nextRule.map { String(afterRule[..<$0.lowerBound]) } ?? String(afterRule.prefix(200))
+        #expect(rule.contains("width: 100%;"))
     }
 }

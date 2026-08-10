@@ -15,6 +15,7 @@ public enum StaffMelodyEngravingPage {
             )) ?? musicXML
         let payload = Data(laidOut.utf8).base64EncodedString()
         let scale = notationScalePercent
+        let pageWidth = MusicXMLSystemBreakLayout.pageWidth
         return """
         <!DOCTYPE html>
         <html>
@@ -33,11 +34,12 @@ public enum StaffMelodyEngravingPage {
               overflow: hidden;
             }
             #notation {
-              max-width: 96%;
+              width: 96%;
               max-height: 92%;
               background: transparent;
             }
             #notation svg {
+              width: 100%;
               max-width: 100%;
               height: auto;
               background: transparent;
@@ -106,6 +108,7 @@ public enum StaffMelodyEngravingPage {
                   tk.setOptions({
                     scale: \(scale),
                     breaks: "encoded",
+                    pageWidth: \(pageWidth),
                     adjustPageHeight: true,
                     footer: "none",
                     header: "none"
