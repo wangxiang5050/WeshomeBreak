@@ -33,16 +33,16 @@ public struct MusicXMLImportGate: Sendable {
         do {
             document = try XMLDocument(xmlString: musicXML, options: [])
         } catch {
-            return .rejected(reason: "Invalid MusicXML: \(error.localizedDescription)")
+            return .rejected(reason: "无效的 MusicXML：\(error.localizedDescription)")
         }
 
         guard let root = document.rootElement() else {
-            return .rejected(reason: "Invalid MusicXML: missing root element")
+            return .rejected(reason: "无效的 MusicXML：缺少根元素")
         }
 
         let rootName = root.name ?? ""
         guard rootName == "score-partwise" || rootName == "score-timewise" else {
-            return .rejected(reason: "Invalid MusicXML: expected score-partwise or score-timewise root")
+            return .rejected(reason: "无效的 MusicXML：根元素应为 score-partwise 或 score-timewise")
         }
 
         if let rejection = rejectMultipleParts(in: root) {
@@ -61,10 +61,10 @@ public struct MusicXMLImportGate: Sendable {
         let measureCount = countMeasures(in: root)
         var warnings: [String] = []
         if measureCount > 8 {
-            warnings.append("Measure count \(measureCount) exceeds the target of 8; import is still allowed.")
+            warnings.append("小节数为 \(measureCount)，超过目标 8 小节；仍允许导入。")
         }
 
-        let title = extractTitle(from: root) ?? "Untitled Melody"
+        let title = extractTitle(from: root) ?? "未命名旋律"
         return .accepted(
             ImportedMelodyDraft(
                 title: title,
@@ -80,12 +80,12 @@ public struct MusicXMLImportGate: Sendable {
     private func rejectMultipleParts(in root: XMLElement) -> String? {
         let scoreParts = elements(matching: ".//score-part", in: root)
         if scoreParts.count > 1 {
-            return "Multiple parts are not supported; import accepts a single part only."
+            return "不支持多个 Part，仅接受单声部谱。"
         }
 
         let parts = elements(matching: "./part", in: root)
         if parts.count > 1 {
-            return "Multiple parts are not supported; import accepts a single part only."
+            return "不支持多个 Part，仅接受单声部谱。"
         }
         return nil
     }
@@ -94,21 +94,21 @@ public struct MusicXMLImportGate: Sendable {
         // Musical content outside the Staff Melody v1 subset — reject the
         // whole file rather than silently dropping meaning.
         let forbidden: [(element: String, reason: String)] = [
-            ("chord", "Chords are not supported in Staff Melody v1."),
-            ("lyric", "Lyrics are not supported in Staff Melody v1."),
-            ("slur", "Slurs are not supported in Staff Melody v1."),
-            ("backup", "Multiple voices / layers (backup) are not supported; import accepts a single voice only."),
-            ("forward", "Multiple voices / layers (forward) are not supported; import accepts a single voice only."),
-            ("ornaments", "Ornaments are not supported in Staff Melody v1."),
-            ("harmony", "Harmony symbols are not supported in Staff Melody v1."),
-            ("figured-bass", "Figured bass is not supported in Staff Melody v1."),
-            ("glissando", "Glissando is not supported in Staff Melody v1."),
-            ("slide", "Slide is not supported in Staff Melody v1."),
-            ("tremolo", "Tremolo is not supported in Staff Melody v1."),
-            ("technical", "Technical notations are not supported in Staff Melody v1."),
-            ("grace", "Grace notes are not supported in Staff Melody v1."),
-            ("unpitched", "Unpitched notes are not supported in Staff Melody v1."),
-            ("frame", "Chord frames are not supported in Staff Melody v1.")
+            ("chord", "Staff Melody v1 不支持和弦（chord）。"),
+            ("lyric", "Staff Melody v1 不支持歌词（lyric）。"),
+            ("slur", "Staff Melody v1 不支持圆滑线（slur）。"),
+            ("backup", "不支持多声部 / 层（backup），仅接受单 voice。"),
+            ("forward", "不支持多声部 / 层（forward），仅接受单 voice。"),
+            ("ornaments", "Staff Melody v1 不支持装饰音（ornaments）。"),
+            ("harmony", "Staff Melody v1 不支持和声标记（harmony）。"),
+            ("figured-bass", "Staff Melody v1 不支持数字低音。"),
+            ("glissando", "Staff Melody v1 不支持滑音（glissando）。"),
+            ("slide", "Staff Melody v1 不支持 slide。"),
+            ("tremolo", "Staff Melody v1 不支持震音（tremolo）。"),
+            ("technical", "Staff Melody v1 不支持演奏技法记号。"),
+            ("grace", "Staff Melody v1 不支持倚音（grace）。"),
+            ("unpitched", "Staff Melody v1 不支持无音高音符。"),
+            ("frame", "Staff Melody v1 不支持和弦框。")
         ]
         for item in forbidden where elementExists(named: item.element, in: root) {
             return item.reason
@@ -121,7 +121,7 @@ public struct MusicXMLImportGate: Sendable {
         let voices = Set(voiceNodes.compactMap { $0.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty })
         if voices.count > 1 {
-            return "Multiple voices are not supported; import accepts a single voice only."
+            return "不支持多个 voice，仅接受单声部。"
         }
         return nil
     }
@@ -133,7 +133,7 @@ public struct MusicXMLImportGate: Sendable {
             let actual = intValue(ofChild: "actual-notes", in: mod) ?? 0
             let normal = intValue(ofChild: "normal-notes", in: mod) ?? 0
             if !(actual == 3 && normal == 2) {
-                return "Only common triplets are supported; non-triplet tuplets are rejected."
+                return "仅支持常见三连音；非三连音的 tuplet 会被拒绝。"
             }
         }
 
@@ -145,7 +145,7 @@ public struct MusicXMLImportGate: Sendable {
             let number = mark.attribute(forName: "number")?.stringValue ?? "1"
             if type == "start" {
                 if !openNumbers.isEmpty {
-                    return "Nested tuplets are not supported in Staff Melody v1."
+                    return "Staff Melody v1 不支持嵌套 tuplet。"
                 }
                 openNumbers.insert(number)
             } else if type == "stop" {

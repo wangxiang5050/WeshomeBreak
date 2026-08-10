@@ -5,18 +5,21 @@ import SwiftUI
 struct WeshomeBreakApp: App {
     @StateObject private var schedulerController: BreakSchedulerController
     @StateObject private var settingsStore: BreakSettingsStore
+    @StateObject private var melodyLibraryStore: MelodyLibraryStore
     private let overlayCoordinator: BreakOverlayCoordinator
     private let availableSceneModes: [BreakSceneMode]
 
     init() {
         let settingsStore = BreakSettingsStore()
         let melodyLibrary = MelodyLibrary(rootDirectory: AppPaths.melodyLibraryRoot)
+        let melodyLibraryStore = MelodyLibraryStore(library: melodyLibrary)
         let sceneModes: [BreakSceneMode] = [
             StaffMelodySceneMode(library: melodyLibrary)
         ]
         let controller = BreakSchedulerController(settingsStore: settingsStore)
 
         _settingsStore = StateObject(wrappedValue: settingsStore)
+        _melodyLibraryStore = StateObject(wrappedValue: melodyLibraryStore)
         _schedulerController = StateObject(wrappedValue: controller)
         availableSceneModes = sceneModes
         overlayCoordinator = BreakOverlayCoordinator(
@@ -34,7 +37,11 @@ struct WeshomeBreakApp: App {
         .menuBarExtraStyle(.menu)
 
         Window("设置", id: "settings") {
-            SettingsView(settingsStore: settingsStore, availableSceneModes: availableSceneModes)
+            SettingsView(
+                settingsStore: settingsStore,
+                melodyLibraryStore: melodyLibraryStore,
+                availableSceneModes: availableSceneModes
+            )
         }
         .windowResizability(.contentSize)
     }

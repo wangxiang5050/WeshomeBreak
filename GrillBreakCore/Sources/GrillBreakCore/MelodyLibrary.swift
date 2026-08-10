@@ -168,9 +168,9 @@ public final class MelodyLibrary: @unchecked Sendable {
     private func errorDescription(_ error: MelodyLibraryError) -> String {
         switch error {
         case .melodyNotFound(let id):
-            return "Melody not found: \(id.uuidString)"
+            return "找不到旋律：\(id.uuidString)"
         case .unsupportedFileExtension(let ext):
-            return "Unsupported file extension: \(ext)"
+            return "不支持的文件扩展名：\(ext)"
         case .ioFailure(let message):
             return message
         }

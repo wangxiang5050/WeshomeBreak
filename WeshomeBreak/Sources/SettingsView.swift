@@ -1,17 +1,24 @@
 import GrillBreakCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Ticket 07's settings panel: work/rest durations, skip/delay permissions
-/// (plus delay length), and the scene mode selection strategy. Every control
-/// binds directly to `BreakSettingsStore`, which persists to `UserDefaults`
-/// and pushes changes live to the running scheduler/overlay — there's
-/// nothing to "save", edits apply as they're made.
+/// (plus delay length), scene mode selection strategy, and Melody Library
+/// import / manage / manual selection. Every control binds to a store that
+/// persists immediately — there's nothing to "save", edits apply as made.
 struct SettingsView: View {
     @ObservedObject var settingsStore: BreakSettingsStore
+    @ObservedObject var melodyLibraryStore: MelodyLibraryStore
     let availableSceneModes: [BreakSceneMode]
+
+    @State private var isImporting = false
 
     private static let durationRange: ClosedRange<Double> = 1...120
     private static let delayRange: ClosedRange<Double> = 1...60
+    private static let musicXMLTypes: [UTType] = [
+        UTType(filenameExtension: "musicxml"),
+        UTType(filenameExtension: "mxl")
+    ].compactMap { $0 }
 
     var body: some View {
         Form {
@@ -48,10 +55,98 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.menu)
             }
+
+            Section("旋律库") {
+                Button("导入 MusicXML…") {
+                    isImporting = true
+                }
+
+                if let statusMessage = melodyLibraryStore.feedback.message {
+                    Text(statusMessage)
+                        .font(.callout)
+                        .foregroundStyle(melodyLibraryStore.feedback.isError ? .red : .secondary)
+                        .textSelection(.enabled)
+                }
+
+                if melodyLibraryStore.melodies.isEmpty {
+                    Text("还没有旋律。可用 Audiveris / MuseScore 导出 .musicxml 或 .mxl 后导入。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(melodyLibraryStore.melodies) { melody in
+                        melodyRow(melody)
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 360)
+        .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
+        .fileImporter(
+            isPresented: $isImporting,
+            allowedContentTypes: Self.musicXMLTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            handleImport(result)
+        }
+    }
+
+    private func melodyRow(_ melody: UserMelody) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Button {
+                melodyLibraryStore.select(id: melody.id)
+            } label: {
+                Image(systemName: melodyLibraryStore.selectedMelodyID == melody.id
+                      ? "checkmark.circle.fill"
+                      : "circle")
+            }
+            .buttonStyle(.plain)
+            .help("设为当前旋律")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(melody.title)
+                Text("\(melody.measureCount) 小节")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            if melodyLibraryStore.selectedMelodyID == melody.id {
+                Text("当前")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button(role: .destructive) {
+                melodyLibraryStore.delete(id: melody.id)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("删除旋律")
+        }
+    }
+
+    private func handleImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .failure(let error):
+            let nsError = error as NSError
+            // User cancelled the open panel — don't treat as a failure banner.
+            if nsError.domain == NSCocoaErrorDomain, nsError.code == NSUserCancelledError {
+                return
+            }
+            melodyLibraryStore.reportFailure("无法打开文件：\(error.localizedDescription)")
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessed {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+            melodyLibraryStore.importFile(at: url)
+        }
     }
 
     private func durationRow(title: String, minutes: Binding<Double>, range: ClosedRange<Double>) -> some View {
