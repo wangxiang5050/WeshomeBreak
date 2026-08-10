@@ -4,8 +4,17 @@ import Foundation
 /// Keeps Staff Melody Scene styling (transparent page + white ink) testable
 /// without AppKit / WKWebView.
 public enum StaffMelodyEngravingPage {
+    /// 150% of the previous Staff Melody Verovio scale (40 → 60).
+    public static let notationScalePercent = 60
+
     public static func html(musicXML: String) -> String {
-        let payload = Data(musicXML.utf8).base64EncodedString()
+        let laidOut =
+            (try? MusicXMLSystemBreakLayout.applying(
+                measuresPerSystem: MusicXMLSystemBreakLayout.measuresPerSystem,
+                to: musicXML
+            )) ?? musicXML
+        let payload = Data(laidOut.utf8).base64EncodedString()
+        let scale = notationScalePercent
         return """
         <!DOCTYPE html>
         <html>
@@ -32,6 +41,19 @@ public enum StaffMelodyEngravingPage {
               max-width: 100%;
               height: auto;
               background: transparent;
+              color: #ffffff;
+            }
+            /* Verovio noteheads/clefs/beams are often bare <use> with no fill
+               attribute (SVG default black). Force every glyph to white ink. */
+            #notation svg * {
+              fill: #ffffff !important;
+              color: #ffffff !important;
+            }
+            #notation svg [fill="none"] {
+              fill: none !important;
+            }
+            #notation svg [stroke]:not([stroke="none"]) {
+              stroke: #ffffff !important;
             }
             #status {
               font: 18px -apple-system, sans-serif;
@@ -56,9 +78,11 @@ public enum StaffMelodyEngravingPage {
                 const svg = container.querySelector("svg");
                 if (!svg) return;
                 svg.style.color = "#ffffff";
+                // Also set attributes: CSS covers most cases; this catches
+                // bare <use> glyphs that otherwise inherit SVG default black.
                 svg.querySelectorAll("*").forEach((el) => {
                   const fill = el.getAttribute("fill");
-                  if (fill && fill !== "none" && fill !== "transparent") {
+                  if (fill !== "none" && fill !== "transparent") {
                     el.setAttribute("fill", "#ffffff");
                   }
                   const stroke = el.getAttribute("stroke");
@@ -80,7 +104,8 @@ public enum StaffMelodyEngravingPage {
                 try {
                   const tk = new verovio.toolkit();
                   tk.setOptions({
-                    scale: 40,
+                    scale: \(scale),
+                    breaks: "encoded",
                     adjustPageHeight: true,
                     footer: "none",
                     header: "none"

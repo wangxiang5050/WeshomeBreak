@@ -19,19 +19,31 @@ struct StaffMelodyEngravingPageTests {
     func htmlForcesWhiteNotationInk() {
         let html = StaffMelodyEngravingPage.html(musicXML: "<score-partwise/>")
 
-        // Reliable white ink: recolor engraved SVG attributes after render.
-        #expect(html.contains("#ffffff"))
+        // Verovio noteheads/clefs are bare <use> with no fill attr (SVG default
+        // black). Force fill/stroke/color via CSS so every glyph is white.
+        #expect(html.contains("#notation svg *"))
+        #expect(html.contains("fill: #ffffff !important"))
+        #expect(html.contains("[stroke]:not([stroke=\"none\"])"))
         #expect(html.contains("applyWhiteInk"))
-        #expect(html.contains("setAttribute(\"fill\", \"#ffffff\")"))
         #expect(!html.contains("filter: brightness(0) invert(1)"))
     }
 
     @Test
-    func htmlEmbedsMusicXMLPayload() {
-        let xml = "<score-partwise version=\"4.0\"/>"
+    func htmlEmbedsMusicXMLPayload() throws {
+        let xml = MusicXMLFixtures.nineMeasures
+        let laidOut = try MusicXMLSystemBreakLayout.applying(measuresPerSystem: 4, to: xml)
         let html = StaffMelodyEngravingPage.html(musicXML: xml)
-        let payload = Data(xml.utf8).base64EncodedString()
+        let payload = Data(laidOut.utf8).base64EncodedString()
 
         #expect(html.contains(payload))
+    }
+
+    @Test
+    func htmlUsesFourMeasuresPerSystemAt150PercentScale() {
+        let html = StaffMelodyEngravingPage.html(musicXML: MusicXMLFixtures.nineMeasures)
+
+        #expect(html.contains("scale: 60"))
+        #expect(html.contains("breaks: \"encoded\""))
+        #expect(!html.contains("scale: 40"))
     }
 }
