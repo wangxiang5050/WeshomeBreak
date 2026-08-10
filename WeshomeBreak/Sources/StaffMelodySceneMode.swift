@@ -1,3 +1,4 @@
+import AppKit
 import GrillBreakCore
 import SwiftUI
 import WebKit
@@ -80,8 +81,15 @@ private struct VerovioScoreView: NSViewRepresentable {
     let musicXML: String
 
     func makeNSView(context: Context) -> WKWebView {
-        let webView = WKWebView(frame: .zero)
+        // drawsBackground must be set on the configuration *before* init;
+        // setting it only on the instance leaves macOS WKWebView opaque white.
+        let configuration = WKWebViewConfiguration()
+        configuration.setValue(false, forKey: "drawsBackground")
+        let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.setValue(false, forKey: "drawsBackground")
+        webView.underPageBackgroundColor = .clear
+        webView.wantsLayer = true
+        webView.layer?.backgroundColor = NSColor.clear.cgColor
         return webView
     }
 
@@ -137,89 +145,8 @@ private struct VerovioScoreView: NSViewRepresentable {
         )
 
         let pageURL = directory.appendingPathComponent("score.html")
-        try makeHTML(musicXML: musicXML).write(to: pageURL, atomically: true, encoding: .utf8)
+        try StaffMelodyEngravingPage.html(musicXML: musicXML)
+            .write(to: pageURL, atomically: true, encoding: .utf8)
         return pageURL
-    }
-
-    private static func makeHTML(musicXML: String) -> String {
-        let payload = Data(musicXML.utf8).base64EncodedString()
-        return """
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8" />
-          <style>
-            html, body {
-              margin: 0;
-              padding: 0;
-              width: 100%;
-              height: 100%;
-              background: transparent;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              overflow: hidden;
-            }
-            #notation {
-              max-width: 96%;
-              max-height: 92%;
-            }
-            #notation svg {
-              max-width: 100%;
-              height: auto;
-              /* Verovio ink is black; invert to light notation on dark scene. */
-              filter: brightness(0) invert(1);
-            }
-            #status {
-              font: 18px -apple-system, sans-serif;
-              color: rgba(255, 255, 255, 0.55);
-            }
-          </style>
-          <script src="verovio-toolkit-wasm.js"></script>
-        </head>
-        <body>
-          <div id="notation"><div id="status">正在镌刻谱面…</div></div>
-          <script>
-            (function () {
-              const encoded = "\(payload)";
-              const binary = atob(encoded);
-              const bytes = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
-              }
-              const musicXML = new TextDecoder("utf-8").decode(bytes);
-
-              function render() {
-                try {
-                  const tk = new verovio.toolkit();
-                  tk.setOptions({
-                    scale: 40,
-                    adjustPageHeight: true,
-                    footer: "none",
-                    header: "none"
-                  });
-                  if (!tk.loadData(musicXML)) {
-                    document.getElementById("notation").innerHTML =
-                      "<div id='status'>谱面加载失败</div>";
-                    return;
-                  }
-                  document.getElementById("notation").innerHTML = tk.renderToSVG(1);
-                } catch (error) {
-                  document.getElementById("notation").innerHTML =
-                    "<div id='status'>谱面渲染失败</div>";
-                }
-              }
-
-              if (typeof verovio !== "undefined" && verovio.module) {
-                verovio.module.onRuntimeInitialized = render;
-              } else {
-                document.getElementById("notation").innerHTML =
-                  "<div id='status'>Verovio 未能初始化</div>";
-              }
-            })();
-          </script>
-        </body>
-        </html>
-        """
     }
 }

@@ -1,0 +1,114 @@
+import Foundation
+
+/// Builds the offline HTML page that hosts Verovio and engraves MusicXML.
+/// Keeps Staff Melody Scene styling (transparent page + white ink) testable
+/// without AppKit / WKWebView.
+public enum StaffMelodyEngravingPage {
+    public static func html(musicXML: String) -> String {
+        let payload = Data(musicXML.utf8).base64EncodedString()
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            html, body {
+              margin: 0;
+              padding: 0;
+              width: 100%;
+              height: 100%;
+              background: transparent;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+            }
+            #notation {
+              max-width: 96%;
+              max-height: 92%;
+              background: transparent;
+            }
+            #notation svg {
+              max-width: 100%;
+              height: auto;
+              background: transparent;
+            }
+            #status {
+              font: 18px -apple-system, sans-serif;
+              color: rgba(255, 255, 255, 0.55);
+            }
+          </style>
+          <script src="verovio-toolkit-wasm.js"></script>
+        </head>
+        <body>
+          <div id="notation"><div id="status">正在镌刻谱面…</div></div>
+          <script>
+            (function () {
+              const encoded = "\(payload)";
+              const binary = atob(encoded);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+              }
+              const musicXML = new TextDecoder("utf-8").decode(bytes);
+
+              function applyWhiteInk(container) {
+                const svg = container.querySelector("svg");
+                if (!svg) return;
+                svg.style.color = "#ffffff";
+                svg.querySelectorAll("*").forEach((el) => {
+                  const fill = el.getAttribute("fill");
+                  if (fill && fill !== "none" && fill !== "transparent") {
+                    el.setAttribute("fill", "#ffffff");
+                  }
+                  const stroke = el.getAttribute("stroke");
+                  if (stroke && stroke !== "none" && stroke !== "transparent") {
+                    el.setAttribute("stroke", "#ffffff");
+                  }
+                  if (el.style) {
+                    if (el.style.fill && el.style.fill !== "none") {
+                      el.style.fill = "#ffffff";
+                    }
+                    if (el.style.stroke && el.style.stroke !== "none") {
+                      el.style.stroke = "#ffffff";
+                    }
+                  }
+                });
+              }
+
+              function render() {
+                try {
+                  const tk = new verovio.toolkit();
+                  tk.setOptions({
+                    scale: 40,
+                    adjustPageHeight: true,
+                    footer: "none",
+                    header: "none"
+                  });
+                  if (!tk.loadData(musicXML)) {
+                    document.getElementById("notation").innerHTML =
+                      "<div id='status'>谱面加载失败</div>";
+                    return;
+                  }
+                  const notation = document.getElementById("notation");
+                  notation.innerHTML = tk.renderToSVG(1);
+                  applyWhiteInk(notation);
+                } catch (error) {
+                  document.getElementById("notation").innerHTML =
+                    "<div id='status'>谱面渲染失败</div>";
+                }
+              }
+
+              if (typeof verovio !== "undefined" && verovio.module) {
+                verovio.module.onRuntimeInitialized = render;
+              } else {
+                document.getElementById("notation").innerHTML =
+                  "<div id='status'>Verovio 未能初始化</div>";
+              }
+            })();
+          </script>
+        </body>
+        </html>
+        """
+    }
+}
