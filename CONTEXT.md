@@ -55,3 +55,7 @@ _Avoid_: playlist, catalog (unless UI copy)
 **Melody Selection**:
 Which User Melody from the Melody Library is shown on the next Staff Melody Scene. v1 is manual pick of one melody; later strategies (e.g. random) may extend this. Distinct from **Scene Mode Selection** (which Break Scene Mode to show).
 _Avoid_: mode selection, scene selection (those refer to Break Scene Mode)
+
+**Staff Melody Visibility**:
+Whether the Staff Melody Scene's content (engraved score, empty state, or failure copy) is shown on the rest overlay during the current break. Hiding clears that content area only; the break, countdown, and Break Scene Mode selection are unchanged. Session-scoped for one break — each new break starts visible again.
+_Avoid_: hide melody (ambiguous with deleting from the Melody Library), scene mode off, mute

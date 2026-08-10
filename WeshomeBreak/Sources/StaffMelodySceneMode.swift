@@ -7,7 +7,7 @@ import WebKit
 /// (MusicXML → SVG inside WKWebView). Empty Melody Library → actionable
 /// empty state; countdown remains the overlay's responsibility.
 struct StaffMelodySceneMode: BreakSceneMode {
-    let identifier = "staff-melody"
+    let identifier = StaffMelodyVisibility.sceneModeIdentifier
     let displayName = "五线谱旋律"
 
     let library: MelodyLibrary
@@ -21,23 +21,26 @@ struct StaffMelodySceneMode: BreakSceneMode {
 
 struct StaffMelodySceneView: View {
     let content: StaffMelodyContent
+    @Environment(\.staffMelodyContentVisible) private var isContentVisible
 
     var body: some View {
         ZStack {
             background
 
-            switch content {
-            case .empty:
-                emptyState
-            case .score(let musicXML):
-                // No light “print card”: engrave on the dark scene. Bottom
-                // inset keeps the score clear of the skip/delay control bar.
-                VerovioScoreView(musicXML: musicXML)
-                    .padding(.horizontal, 40)
-                    .padding(.top, 40)
-                    .padding(.bottom, 110)
-            case .failed(let message):
-                messageState(message)
+            if isContentVisible {
+                switch content {
+                case .empty:
+                    emptyState
+                case .score(let musicXML):
+                    // No light “print card”: engrave on the dark scene. Bottom
+                    // inset keeps the score clear of the skip/delay control bar.
+                    VerovioScoreView(musicXML: musicXML)
+                        .padding(.horizontal, 40)
+                        .padding(.top, 40)
+                        .padding(.bottom, 110)
+                case .failed(let message):
+                    messageState(message)
+                }
             }
         }
         .ignoresSafeArea()

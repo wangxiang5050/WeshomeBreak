@@ -56,7 +56,8 @@ struct StaffMelodyEngravingPageTests {
         // four-bar systems look unchanged. Force full-width display on the SVG.
         let svgRuleStart = html.range(of: "#notation svg {")
         #expect(svgRuleStart != nil)
-        let afterRule = html[svgRuleStart!...]
+        guard let svgRuleStart else { return }
+        let afterRule = html[svgRuleStart.lowerBound...]
         let nextRule = afterRule.range(of: "\n            /*") ?? afterRule.range(of: "#notation svg *")
         let rule = nextRule.map { String(afterRule[..<$0.lowerBound]) } ?? String(afterRule.prefix(200))
         #expect(rule.contains("width: 100%;"))
