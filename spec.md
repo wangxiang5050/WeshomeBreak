@@ -47,7 +47,7 @@
 **总体架构**
 - macOS 原生 App,纯菜单栏形态,无 Dock 图标、无独立主窗口;菜单栏交互使用 SwiftUI `MenuBarExtra`。
 - Bundle ID:`com.weshome.break`;App 名称:Weshome Break;界面文案统一使用中文。
-- 最低支持 macOS 26+,以 SwiftUI 为主要 UI 框架。
+- 最低支持 macOS 14.0+,以 SwiftUI 为主要 UI 框架。
 - 核心业务逻辑拆分为一个本地 Swift Package(`GrillBreakCore`),与 App target(UI 与系统集成)解耦。`GrillBreakCore` 不依赖 SwiftUI/AppKit,只包含纯逻辑与协议定义。
 
 **调度模型**
@@ -101,7 +101,7 @@
   - 「延迟」逻辑:触发后休息重新排定到「当前时刻 + 延迟时长」,且可重复触发不受次数限制。
   - `BreakSceneMode` 注册与选择逻辑:固定模式选择返回指定模式;随机轮换在多个模式下不会连续两次选中同一个模式。
   - MusicXML 导入门禁:超集/多 Part/多 Voice 等被拒绝;合法子集(含三连音、Beam、Tie 等约定)可接受;多于 8 小节产生警告仍可导入。
-- 测试框架使用 Swift Testing(而非 XCTest),与项目最低支持 macOS 26+ 的技术栈保持一致。
+- 测试框架使用 Swift Testing(而非 XCTest),与项目最低支持 macOS 14.0+ 的技术栈保持一致。
 - 项目目前是全新代码库,没有既有测试可作为直接的先例参照;`GrillBreakCore` 的测试目标就是本项目内该类测试的第一批先例。
 
 ## Out of Scope
