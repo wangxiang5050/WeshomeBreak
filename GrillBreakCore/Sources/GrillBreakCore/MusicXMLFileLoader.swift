@@ -11,7 +11,7 @@ public struct MusicXMLFileLoader: Sendable {
             do {
                 return try String(contentsOf: url, encoding: .utf8)
             } catch {
-                throw MelodyLibraryError.ioFailure(error.localizedDescription)
+                throw MelodyLibraryError.ioFailure(Self.unreadableFileMessage)
             }
         case "mxl":
             return try loadFromMXL(url)
@@ -19,6 +19,22 @@ public struct MusicXMLFileLoader: Sendable {
             throw MelodyLibraryError.unsupportedFileExtension(ext.isEmpty ? "(none)" : ext)
         }
     }
+
+    /// User-facing copy: reason + next step (import IO failures only).
+    static let unreadableFileMessage = """
+        无法读取该文件。
+        请确认文件未损坏，或用 MuseScore 导出 .musicxml 后再试。
+        """
+
+    static let mxlUnzipFailedMessage = """
+        无法解压该 MXL 文件。
+        建议用 MuseScore 打开后导出为 .musicxml 再导入。
+        """
+
+    static let mxlMissingScoreMessage = """
+        该 MXL 压缩包内没有可用的 MusicXML 谱面。
+        建议用 MuseScore 打开后重新导出为 .musicxml 或 .mxl。
+        """
 
     private func loadFromMXL(_ url: URL) throws -> String {
         let tempRoot = FileManager.default.temporaryDirectory
@@ -33,10 +49,10 @@ public struct MusicXMLFileLoader: Sendable {
             try process.run()
             process.waitUntilExit()
         } catch {
-            throw MelodyLibraryError.ioFailure("Failed to unzip MXL: \(error.localizedDescription)")
+            throw MelodyLibraryError.ioFailure(Self.mxlUnzipFailedMessage)
         }
         guard process.terminationStatus == 0 else {
-            throw MelodyLibraryError.ioFailure("Failed to unzip MXL (exit \(process.terminationStatus))")
+            throw MelodyLibraryError.ioFailure(Self.mxlUnzipFailedMessage)
         }
 
         let scoreRelativePath = try resolveRootfilePath(in: tempRoot)
@@ -44,7 +60,7 @@ public struct MusicXMLFileLoader: Sendable {
         do {
             return try String(contentsOf: scoreURL, encoding: .utf8)
         } catch {
-            throw MelodyLibraryError.ioFailure(error.localizedDescription)
+            throw MelodyLibraryError.ioFailure(Self.unreadableFileMessage)
         }
     }
 
@@ -82,6 +98,6 @@ public struct MusicXMLFileLoader: Sendable {
                 return item.lastPathComponent
             }
         }
-        throw MelodyLibraryError.ioFailure("MXL archive contains no MusicXML score")
+        throw MelodyLibraryError.ioFailure(Self.mxlMissingScoreMessage)
     }
 }

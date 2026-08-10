@@ -29,11 +29,12 @@ struct StaffMelodySceneView: View {
             case .empty:
                 emptyState
             case .score(let musicXML):
+                // No light “print card”: engrave on the dark scene. Bottom
+                // inset keeps the score clear of the skip/delay control bar.
                 VerovioScoreView(musicXML: musicXML)
-                    .padding(32)
-                    .background(Color.white.opacity(0.96))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .padding(40)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 40)
+                    .padding(.bottom, 110)
             case .failed(let message):
                 messageState(message)
             }
@@ -42,8 +43,6 @@ struct StaffMelodySceneView: View {
     }
 
     private var background: some View {
-        // Dark surround keeps the overlay countdown (white) readable; the
-        // Verovio SVG itself stays on a light print-style surface (ADR Phase 1).
         LinearGradient(
             colors: [
                 Color(red: 0.04, green: 0.05, blue: 0.08),
@@ -96,7 +95,7 @@ private struct VerovioScoreView: NSViewRepresentable {
             webView.loadFileURL(pageURL, allowingReadAccessTo: pageURL.deletingLastPathComponent())
         } catch {
             webView.loadHTMLString(
-                "<html><body style='font-family:-apple-system;text-align:center;padding:40px;color:#666'>谱面渲染资源缺失</body></html>",
+                "<html><body style='font-family:-apple-system;text-align:center;padding:40px;color:rgba(255,255,255,0.55);background:transparent'>谱面渲染资源缺失</body></html>",
                 baseURL: nil
             )
         }
@@ -168,10 +167,12 @@ private struct VerovioScoreView: NSViewRepresentable {
             #notation svg {
               max-width: 100%;
               height: auto;
+              /* Verovio ink is black; invert to light notation on dark scene. */
+              filter: brightness(0) invert(1);
             }
             #status {
               font: 18px -apple-system, sans-serif;
-              color: #666;
+              color: rgba(255, 255, 255, 0.55);
             }
           </style>
           <script src="verovio-toolkit-wasm.js"></script>

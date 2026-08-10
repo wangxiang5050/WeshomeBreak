@@ -10,7 +10,7 @@ Staff Melody Scene must show a readable, hummable User Melody—not decorative r
 
 ## Consequences
 
-- Phase 1 is static engraving (no fly-in animation; dark theme is follow-up polish).
+- Phase 1 is static engraving (no fly-in animation). Staff Melody Scene engraves on the dark overlay (light/near-white notation, no light “print card”), with bottom inset so the score stays clear of skip/delay controls.
 - Empty Melody Library shows an actionable empty state; countdown still runs.
 - Later Melody Selection strategies (e.g. random) and in-app image capture are extensions, not Phase 1.
 - Phase 1 embeds the official Verovio JavaScript/WASM toolkit in a `WKWebView` (MusicXML → SVG in-page) rather than the native Swift SPM binding: the C++ package fetch/build was too heavy for this app target, while the JS toolkit is the same engraver and keeps the ADR’s Verovio→SVG contract.

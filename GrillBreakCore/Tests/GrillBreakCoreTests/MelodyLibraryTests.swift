@@ -230,4 +230,46 @@ struct MusicXMLFileLoaderTests {
         #expect(loaded.contains("score-partwise"))
         #expect(loaded.contains("<step>C</step>"))
     }
+
+    @Test("rejects unsupported extensions with actionable reason")
+    func rejectsUnsupportedExtension() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mxl-badext-\(UUID().uuidString)", isDirectory: true)
+        try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let library = MelodyLibrary(rootDirectory: dir.appendingPathComponent("lib"))
+        let bogus = dir.appendingPathComponent("notes.pdf")
+        try! Data().write(to: bogus)
+
+        switch library.importFile(at: bogus) {
+        case .imported:
+            Issue.record("expected rejection for .pdf")
+        case .rejected(let reason):
+            #expect(reason.contains("不支持的文件扩展名：pdf"))
+            #expect(reason.contains("建议导入"))
+            #expect(reason.contains(".musicxml"))
+        }
+    }
+
+    @Test("maps corrupt mxl unzip failure to actionable Chinese copy")
+    func mapsCorruptMXLToActionableCopy() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mxl-corrupt-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let library = MelodyLibrary(rootDirectory: dir.appendingPathComponent("lib"))
+        let bogus = dir.appendingPathComponent("broken.mxl")
+        try "not-a-zip".write(to: bogus, atomically: true, encoding: .utf8)
+
+        switch library.importFile(at: bogus) {
+        case .imported:
+            Issue.record("expected rejection for corrupt mxl")
+        case .rejected(let reason):
+            #expect(reason.contains("无法解压该 MXL 文件"))
+            #expect(reason.contains("导出为 .musicxml"))
+            #expect(!reason.contains("exit"))
+        }
+    }
 }

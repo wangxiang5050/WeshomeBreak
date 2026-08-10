@@ -66,6 +66,7 @@ struct SettingsView: View {
                         .font(.callout)
                         .foregroundStyle(melodyLibraryStore.feedback.isError ? .red : .secondary)
                         .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if melodyLibraryStore.melodies.isEmpty {

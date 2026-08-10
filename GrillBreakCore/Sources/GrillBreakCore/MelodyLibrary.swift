@@ -106,7 +106,7 @@ public final class MelodyLibrary: @unchecked Sendable {
         } catch let error as MelodyLibraryError {
             return .rejected(reason: errorDescription(error))
         } catch {
-            return .rejected(reason: error.localizedDescription)
+            return .rejected(reason: MusicXMLFileLoader.unreadableFileMessage)
         }
     }
 
@@ -146,7 +146,10 @@ public final class MelodyLibrary: @unchecked Sendable {
             try saveManifest()
             return .imported(melody, warnings: draft.warnings)
         } catch {
-            return .rejected(reason: error.localizedDescription)
+            return .rejected(reason: """
+                无法保存旋律文件。
+                请检查磁盘空间后重试。
+                """)
         }
     }
 
@@ -170,7 +173,10 @@ public final class MelodyLibrary: @unchecked Sendable {
         case .melodyNotFound(let id):
             return "找不到旋律：\(id.uuidString)"
         case .unsupportedFileExtension(let ext):
-            return "不支持的文件扩展名：\(ext)"
+            return """
+                不支持的文件扩展名：\(ext)。
+                建议导入 MuseScore 或 Audiveris 导出的 .musicxml / .mxl 文件。
+                """
         case .ioFailure(let message):
             return message
         }
