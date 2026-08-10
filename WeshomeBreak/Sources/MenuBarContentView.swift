@@ -6,38 +6,32 @@ struct MenuBarContentView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Text(statusLine)
+        // Status is a non-interactive header. Per-second remaining ticks must
+        // not republish through `BreakSchedulerController` or this menu is
+        // rebuilt while open and NSMenu hover highlight drifts. Live title
+        // updates while open are handled by `MenuBarLiveStatusTitleUpdater`.
+        Text(schedulerController.menuStatusLine)
 
-        Button(schedulerController.isPaused ? "继续" : "暂停") {
+        Button(schedulerController.isPaused ? MenuBarCopy.resume : MenuBarCopy.pause) {
             schedulerController.togglePause()
         }
 
-        Button("立即开始一次休息") {
+        Button(MenuBarCopy.startBreakNow) {
             schedulerController.startBreakNow()
         }
         .disabled(schedulerController.phase == .resting || schedulerController.isPaused)
 
         Divider()
 
-        Button("设置…") {
+        Button(MenuBarCopy.settings) {
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "settings")
         }
 
         Divider()
 
-        Button("退出 App") {
+        Button(MenuBarCopy.quit) {
             NSApplication.shared.terminate(nil)
         }
-    }
-
-    private var statusLine: String {
-        let phaseName: String
-        switch schedulerController.phase {
-        case .working: phaseName = "工作中"
-        case .resting: phaseName = "休息中"
-        }
-        let label = schedulerController.isPaused ? "已暂停" : phaseName
-        return "\(label) · 剩余 \(schedulerController.formattedRemaining)"
     }
 }

@@ -2,17 +2,16 @@ import Foundation
 import GrillBreakCore
 
 /// Owns the `GrillBreakCore.BreakScheduler` for the running app and bridges
-/// it into SwiftUI: drives it with a repeating `Timer` and republishes its
-/// state as `@Published` properties so views update automatically.
-///
-/// The scheduler itself has no notion of timers or observation — this class
-/// is the (thin, UI-layer, untested-by-design per the spec) glue that wires
-/// it into a running app.
+/// it into SwiftUI: drives it with a repeating `Timer` and republishes
+/// phase/pause as `@Published` properties. Per-second remaining time lives on
+/// `countdown` so menu-bar SwiftUI content is not rebuilt every tick.
 @MainActor
 final class BreakSchedulerController: ObservableObject {
     @Published private(set) var phase: BreakPhase
     @Published private(set) var isPaused: Bool
-    @Published private(set) var remaining: TimeInterval
+    /// Per-second remaining time. Observed by the overlay via `countdown`,
+    /// not via this object's `objectWillChange` (see `BreakCountdown`).
+    let countdown: BreakCountdown
 
     private let scheduler: BreakScheduler
     private let settingsStore: BreakSettingsStore
@@ -32,7 +31,7 @@ final class BreakSchedulerController: ObservableObject {
         )
         self.phase = self.scheduler.phase
         self.isPaused = self.scheduler.isPaused
-        self.remaining = self.scheduler.remaining
+        self.countdown = BreakCountdown(remaining: self.scheduler.remaining)
         startTicking()
 
         settingsStore.onDurationChange = { [weak self] in
@@ -116,17 +115,33 @@ final class BreakSchedulerController: ObservableObject {
     }
 
     private func refreshPublishedState() {
-        phase = scheduler.phase
-        isPaused = scheduler.isPaused
-        remaining = scheduler.remaining
+        let newPhase = scheduler.phase
+        let newPaused = scheduler.isPaused
+        // Only publish when menu-relevant fields change. Assigning every tick
+        // (even with equal values) would still fire `objectWillChange` and
+        // rebuild an open MenuBarExtra `.menu`.
+        if phase != newPhase {
+            phase = newPhase
+        }
+        if isPaused != newPaused {
+            isPaused = newPaused
+        }
+        countdown.update(scheduler.remaining)
     }
 
-    /// `remaining` formatted as `mm:ss`, shared by the menu bar status line
-    /// and the break overlay's countdown display.
+    /// `remaining` formatted as `mm:ss` for the menu-bar status line.
     var formattedRemaining: String {
-        let totalSeconds = max(0, Int(remaining.rounded()))
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        countdown.formattedRemaining
+    }
+
+    /// Menu-bar status header: phase (or paused) plus remaining `mm:ss`.
+    var menuStatusLine: String {
+        let phaseLabel: String
+        switch phase {
+        case .working: phaseLabel = "工作中"
+        case .resting: phaseLabel = "休息中"
+        }
+        let label = isPaused ? "已暂停" : phaseLabel
+        return "\(label) · 剩余 \(formattedRemaining)"
     }
 }

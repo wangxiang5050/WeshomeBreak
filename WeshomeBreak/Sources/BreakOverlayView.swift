@@ -8,6 +8,7 @@ import SwiftUI
 /// from the break visual.
 struct BreakOverlayView: View {
     @ObservedObject var schedulerController: BreakSchedulerController
+    @ObservedObject private var countdown: BreakCountdown
     let sceneMode: BreakSceneMode
     @ObservedObject var settingsStore: BreakSettingsStore
 
@@ -21,6 +22,17 @@ struct BreakOverlayView: View {
     @State private var staffMelodyVisibility = StaffMelodyVisibility()
 
     private static let controlBarAutoHideDelay: Duration = .seconds(2.5)
+
+    init(
+        schedulerController: BreakSchedulerController,
+        sceneMode: BreakSceneMode,
+        settingsStore: BreakSettingsStore
+    ) {
+        self.schedulerController = schedulerController
+        self._countdown = ObservedObject(wrappedValue: schedulerController.countdown)
+        self.sceneMode = sceneMode
+        self.settingsStore = settingsStore
+    }
 
     private var controlBarPolicy: BreakOverlayControlBarPolicy {
         BreakOverlayControlBarPolicy(
@@ -36,7 +48,7 @@ struct BreakOverlayView: View {
                 .environment(\.staffMelodyContentVisible, staffMelodyVisibility.isContentVisible)
                 .ignoresSafeArea()
 
-            Text(schedulerController.formattedRemaining)
+            Text(countdown.formattedRemaining)
                 .font(.system(size: 22, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(24)
