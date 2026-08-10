@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] `git init` 初始化仓库版本管理
-- [ ] 用 Xcode 创建标准 macOS App 项目,Bundle ID 为 `com.weshome.break`,App 名称为 Weshome Break
-- [ ] App 不显示 Dock 图标、不打开任何独立窗口(纯菜单栏形态)
-- [ ] 用 SwiftUI `MenuBarExtra` 实现菜单栏图标与下拉菜单
-- [ ] 创建本地 Swift Package `GrillBreakCore`(当前为空骨架,不依赖 SwiftUI/AppKit),并通过 Add Local Package 方式被 App target 引用
-- [ ] 菜单栏菜单中包含「退出 App」入口,点击后应用正常终止
+- [x] `git init` 初始化仓库版本管理
+- [x] 用 Xcode 创建标准 macOS App 项目,Bundle ID 为 `com.weshome.break`,App 名称为 Weshome Break
+- [x] App 不显示 Dock 图标、不打开任何独立窗口(纯菜单栏形态)
+- [x] 用 SwiftUI `MenuBarExtra` 实现菜单栏图标与下拉菜单
+- [x] 创建本地 Swift Package `GrillBreakCore`(当前为空骨架,不依赖 SwiftUI/AppKit),并通过 Add Local Package 方式被 App target 引用
+- [x] 菜单栏菜单中包含「退出 App」入口,点击后应用正常终止
