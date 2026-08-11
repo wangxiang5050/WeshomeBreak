@@ -33,7 +33,16 @@ open WeshomeBreak.xcodeproj
 # In Xcode, select the Weshome Break target → Run
 ```
 
-Signing: App Sandbox is off; sign with your personal Apple ID via Xcode automatic signing. Intended for personal direct distribution (not App Store / no notarization). Confirm the Signing Team in Xcode before the first Run.
+Signing: App Sandbox is off; sign with your personal Apple ID via Xcode automatic signing. **Unnotarized Acquaintance Distribution** (not App Store / no notarization). Confirm the Signing Team in Xcode before the first Run. On a recipient Mac, Gatekeeper may require Control-click → Open once (expected).
+
+```bash
+# Build a Release DMG (output: dist/WeshomeBreak-<version>-<arch>.dmg)
+# CLI signing needs your Team ID (visible in Xcode → Signing & Capabilities)
+export DEVELOPMENT_TEAM=<your-team-id>
+./scripts/package-dmg.sh
+# Optional: ./scripts/package-dmg.sh --universal
+# Optional: ./scripts/package-dmg.sh --allow-unsigned
+```
 
 ```bash
 # Run GrillBreakCore unit tests

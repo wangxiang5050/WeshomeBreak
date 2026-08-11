@@ -8,6 +8,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ENABLE_HARDENED_RUNTIME: NO
     MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
 packages:
   GrillBreakCore:
     path: ../GrillBreakCore
@@ -24,6 +25,8 @@ targets:
       properties:
         LSUIElement: true
         CFBundleDisplayName: Weshome Break
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
     entitlements:
       path: Sources/WeshomeBreak.entitlements
       properties:

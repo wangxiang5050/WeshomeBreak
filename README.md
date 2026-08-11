@@ -33,7 +33,16 @@ open WeshomeBreak.xcodeproj
 # 在 Xcode 中选择 Weshome Break target → Run
 ```
 
-签名：关闭 App Sandbox，使用本机 Apple ID、Xcode 自动管理签名；定位为个人自用直接分发（非 App Store / 不做 notarization）。首次 Run 前请在 Xcode 中确认 Signing Team。
+签名：关闭 App Sandbox，使用本机 Apple ID、Xcode 自动管理签名；**Unnotarized Acquaintance Distribution**（未公证的熟人分发，非 App Store / 不做 notarization）。首次 Run 前请在 Xcode 中确认 Signing Team。熟人机上若被 Gatekeeper 拦截，右键「打开」一次即可（属预期）。
+
+```bash
+# 打 Release DMG（产物在 dist/WeshomeBreak-<version>-<arch>.dmg）
+# CLI 签名需带上 Team（Xcode → Signing & Capabilities 里可见）
+export DEVELOPMENT_TEAM=<your-team-id>
+./scripts/package-dmg.sh
+# 可选：./scripts/package-dmg.sh --universal
+# 可选：./scripts/package-dmg.sh --allow-unsigned
+```
 
 ```bash
 # 运行 GrillBreakCore 单元测试

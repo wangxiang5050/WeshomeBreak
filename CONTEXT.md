@@ -59,3 +59,9 @@ _Avoid_: mode selection, scene selection (those refer to Break Scene Mode)
 **Staff Melody Visibility**:
 Whether the Staff Melody Scene's content (engraved score, empty state, or failure copy) is shown on the rest overlay during the current break. Hiding clears that content area only; the break, countdown, and Break Scene Mode selection are unchanged. Session-scoped for one break — each new break starts visible again.
 _Avoid_: hide melody (ambiguous with deleting from the Melody Library), scene mode off, mute
+
+## Distribution
+
+**Unnotarized Acquaintance Distribution**:
+Handing the app directly to the owner and occasional acquaintances without Apple notarization; Gatekeeper friction (e.g. right-click Open once) is an expected install step, not a defect.
+_Avoid_: personal-only (too narrow), App Store distribution, public notarized release

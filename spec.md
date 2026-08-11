@@ -88,7 +88,8 @@
 - 登录时自动启动使用 `SMAppService` 实现,默认开启,可在设置中关闭。
 
 **分发与签名**
-- 关闭 App Sandbox,使用本机 Apple ID 进行签名(Xcode 自动管理签名),不做 notarization 流程;定位为个人自用工具,直接分发(非 App Store 上架)。
+- 关闭 App Sandbox,使用本机 Apple ID 进行签名(Xcode 自动管理签名),不做 notarization 流程;采用 **Unnotarized Acquaintance Distribution**(未公证的熟人分发):自用与偶发熟人直接分发(非 App Store)。Gatekeeper 首次需右键「打开」属预期。
+- Release DMG 由仓库根目录 `scripts/package-dmg.sh` 产出(`xcodegen` + `xcodebuild` Release + 系统 `hdiutil`);默认拒绝未签名包,可用 `--allow-unsigned` / `--universal`。
 
 ## Testing Decisions
 
@@ -109,7 +110,7 @@
 - 提示音、系统通知(Notification banner)辅助提醒——本版本纯视觉全屏遮罩提醒,不做听觉/系统通知层面的双重提示。
 - 休息历史统计功能(如“本周休息了几次”)——当前只做设置项持久化,不引入历史数据记录与统计展示。
 - 「工作时段模式」「番茄钟预设组合」等除简单循环外的其他调度模型——架构上预留扩展点,但本版本不实现。
-- App Store 上架、完整的 notarization 公开分发流程——当前定位为个人自用,直接分发。
+- App Store 上架、完整的 notarization 公开分发流程——当前为 Unnotarized Acquaintance Distribution(未公证的熟人分发),不做公证公开分发。
 - 界面多语言/本地化(如中英双语)——当前只做中文界面。
 - 除 Staff Melody Scene 外的其他休息展示模式——架构上做成可插拔协议,但本版本只实现这一种。
 - App 内识图/OMR、谱面飞入动画、深色主题打磨、旋律随机等非手工 Melody Selection、以及休息时发声/节拍器——本版本不做。
