@@ -12,6 +12,10 @@ _Avoid_: effect, theme, screensaver (unless clearly metaphorical)
 The break scene mode that shows a readable, musically correct staff notation of a **User Melody** so the user can hum along while resting.
 _Avoid_: staff-notes decoration, random phrase, ambient notes (those describe the superseded decorative behavior)
 
+**Staff Melody Page**:
+The outcome of turning the Melody Library's current Melody Selection into what the Staff Melody Scene can show: empty, failed, or ready HTML for Score Rendering (Verovio).
+_Avoid_: StaffMelodyContent, resolver output, engraving prep (those were shallow pass-through names)
+
 **User Melody**:
 A melody the user provides for display on the Staff Melody Scene. Product-bundled melodies are not a required content source.
 _Avoid_: song (implies lyrics/arrangement), track, random phrase

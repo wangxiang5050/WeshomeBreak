@@ -1,24 +1,19 @@
 import Foundation
 
-/// What the Staff Melody Scene should show for one rest presentation.
-public enum StaffMelodyContent: Equatable, Sendable {
+/// Staff Melody Page: Melody Library + Melody Selection → empty / failed /
+/// ready HTML for the Verovio Score Rendering adapter.
+public enum StaffMelodyPage: Equatable, Sendable {
     /// Melody Library has no current User Melody — actionable empty state.
     case empty
-    /// Accepted MusicXML ready for Verovio engraving in the scene view.
-    case score(musicXML: String)
     /// Load failed; message is suitable for a calm on-screen hint.
     case failed(message: String)
-}
+    /// Offline HTML page ready for the Verovio WKWebView adapter.
+    case ready(html: String)
 
-/// Resolves Melody Library state into the content the Staff Melody Scene shows.
-/// Engraving (MusicXML → SVG) happens in the app via Verovio; this type only
-/// decides empty / score / failed.
-public struct StaffMelodyResolver: Sendable {
     private static let readFailureMessage = "无法读取旋律，请在设置中重新导入。"
 
-    public init() {}
-
-    public func resolve(library: MelodyLibrary) -> StaffMelodyContent {
+    /// Builds the Staff Melody Page for the library's current Melody Selection.
+    public static func prepare(from library: MelodyLibrary) -> StaffMelodyPage {
         guard let melody = library.currentMelody() else {
             return .empty
         }
@@ -28,7 +23,7 @@ public struct StaffMelodyResolver: Sendable {
             if musicXML.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return .failed(message: Self.readFailureMessage)
             }
-            return .score(musicXML: musicXML)
+            return .ready(html: StaffMelodyEngravingPage.html(musicXML: musicXML))
         } catch {
             return .failed(message: Self.readFailureMessage)
         }

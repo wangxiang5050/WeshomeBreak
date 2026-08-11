@@ -4,8 +4,8 @@ import SwiftUI
 import WebKit
 
 /// Staff Melody Scene: shows the current User Melody engraved by Verovio
-/// (MusicXML → SVG inside WKWebView). Empty Melody Library → actionable
-/// empty state; countdown remains the overlay's responsibility.
+/// (Staff Melody Page HTML → SVG inside WKWebView). Empty Melody Library →
+/// actionable empty state; countdown remains the overlay's responsibility.
 struct StaffMelodySceneMode: BreakSceneMode {
     let identifier = StaffMelodyVisibility.sceneModeIdentifier
     let displayName = "五线谱旋律"
@@ -14,13 +14,13 @@ struct StaffMelodySceneMode: BreakSceneMode {
 
     @MainActor
     func makeView() -> AnyView {
-        let content = StaffMelodyResolver().resolve(library: library)
-        return AnyView(StaffMelodySceneView(content: content))
+        let page = StaffMelodyPage.prepare(from: library)
+        return AnyView(StaffMelodySceneView(page: page))
     }
 }
 
 struct StaffMelodySceneView: View {
-    let content: StaffMelodyContent
+    let page: StaffMelodyPage
     @Environment(\.staffMelodyContentVisible) private var isContentVisible
 
     var body: some View {
@@ -28,13 +28,13 @@ struct StaffMelodySceneView: View {
             background
 
             if isContentVisible {
-                switch content {
+                switch page {
                 case .empty:
                     emptyState
-                case .score(let musicXML):
+                case .ready(let html):
                     // No light “print card”: engrave on the dark scene. Bottom
                     // inset keeps the score clear of the skip/delay control bar.
-                    VerovioScoreView(musicXML: musicXML)
+                    VerovioScoreView(html: html)
                         .padding(.horizontal, 40)
                         .padding(.top, 40)
                         .padding(.bottom, 110)
@@ -79,9 +79,9 @@ struct StaffMelodySceneView: View {
     }
 }
 
-/// Hosts the bundled Verovio toolkit and engraves MusicXML to SVG in-page.
+/// Score Rendering adapter: hosts bundled Verovio and loads a Staff Melody Page.
 private struct VerovioScoreView: NSViewRepresentable {
-    let musicXML: String
+    let html: String
 
     func makeNSView(context: Context) -> WKWebView {
         // drawsBackground must be set on the configuration *before* init;
@@ -97,11 +97,11 @@ private struct VerovioScoreView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        guard context.coordinator.lastMusicXML != musicXML else { return }
-        context.coordinator.lastMusicXML = musicXML
+        guard context.coordinator.lastHTML != html else { return }
+        context.coordinator.lastHTML = html
 
         do {
-            let pageURL = try Self.preparePage(musicXML: musicXML)
+            let pageURL = try Self.preparePage(html: html)
             context.coordinator.replacePageDirectory(pageURL.deletingLastPathComponent())
             webView.loadFileURL(pageURL, allowingReadAccessTo: pageURL.deletingLastPathComponent())
         } catch {
@@ -117,7 +117,7 @@ private struct VerovioScoreView: NSViewRepresentable {
     }
 
     final class Coordinator {
-        var lastMusicXML: String?
+        var lastHTML: String?
         private var pageDirectory: URL?
 
         func replacePageDirectory(_ directory: URL) {
@@ -134,7 +134,7 @@ private struct VerovioScoreView: NSViewRepresentable {
         }
     }
 
-    private static func preparePage(musicXML: String) throws -> URL {
+    private static func preparePage(html: String) throws -> URL {
         guard let scriptURL = Bundle.main.url(forResource: "verovio-toolkit-wasm", withExtension: "js") else {
             throw CocoaError(.fileNoSuchFile)
         }
@@ -148,8 +148,7 @@ private struct VerovioScoreView: NSViewRepresentable {
         )
 
         let pageURL = directory.appendingPathComponent("score.html")
-        try StaffMelodyEngravingPage.html(musicXML: musicXML)
-            .write(to: pageURL, atomically: true, encoding: .utf8)
+        try html.write(to: pageURL, atomically: true, encoding: .utf8)
         return pageURL
     }
 }

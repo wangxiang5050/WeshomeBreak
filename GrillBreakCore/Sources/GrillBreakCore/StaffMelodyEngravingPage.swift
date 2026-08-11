@@ -1,13 +1,12 @@
 import Foundation
 
-/// Builds the offline HTML page that hosts Verovio and engraves MusicXML.
-/// Keeps Staff Melody Scene styling (transparent page + white ink) testable
-/// without AppKit / WKWebView.
-public enum StaffMelodyEngravingPage {
+/// Internal HTML builder for Staff Melody Page (transparent page + white ink).
+/// Callers use `StaffMelodyPage.prepare`; Verovio still runs in the app adapter.
+enum StaffMelodyEngravingPage {
     /// 150% of the previous Staff Melody Verovio scale (40 → 60).
-    public static let notationScalePercent = 60
+    static let notationScalePercent = 60
 
-    public static func html(musicXML: String) -> String {
+    static func html(musicXML: String) -> String {
         let laidOut =
             (try? MusicXMLSystemBreakLayout.applying(
                 measuresPerSystem: MusicXMLSystemBreakLayout.measuresPerSystem,
