@@ -5,8 +5,12 @@ Menu-bar macOS app that enforces work/break cycles with a full-screen rest overl
 ## Language
 
 **Rest Overlay**:
-The full-screen covering on every connected display during a break: Break Scene Mode, remaining-time countdown, and hover controls.
+The full-screen covering on every connected display during a break: Break Scene Mode, remaining-time countdown, and hover controls (cycle skip/delay plus any chrome the current scene contributes). Does not own scene-specific chrome such as Staff Melody Visibility.
 _Avoid_: overlay manager, coordinator (those were shallow pass-through names)
+
+**Break Cycle**:
+The running work/rest alternation as observed by the menu and Rest Overlay: current phase, whether the cycle is paused, and remaining time in this phase.
+_Avoid_: scheduler controller, countdown (as a separate observed object)
 
 **Break Scene Mode**:
 A pluggable visual presentation shown on the Rest Overlay during a break.
@@ -65,8 +69,8 @@ Which User Melody from the Melody Library is shown on the next Staff Melody Scen
 _Avoid_: mode selection, scene selection (those refer to Break Scene Mode)
 
 **Staff Melody Visibility**:
-Whether the Staff Melody Scene's content (engraved score, empty state, or failure copy) is shown on the Rest Overlay during the current break. Hiding clears that content area only; the break, countdown, and Break Scene Mode selection are unchanged. Session-scoped for one break — each new break starts visible again.
-_Avoid_: hide melody (ambiguous with deleting from the Melody Library), scene mode off, mute
+Whether the Staff Melody Scene's content (engraved score, empty state, or failure copy) is shown during the current break. Owned by the Staff Melody Scene for one Rest Overlay presentation. Hiding clears that content area only; the break, countdown, and Break Scene Mode selection are unchanged. Each new break starts visible again.
+_Avoid_: hide melody (ambiguous with deleting from the Melody Library), scene mode off, mute, overlay visibility state
 
 ## Distribution
 

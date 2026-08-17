@@ -14,12 +14,14 @@ private final class OverlayWindow: NSWindow {
 /// target "all current screens" with a window level above regular apps.
 @MainActor
 final class BreakOverlayManager: RestOverlayWindows {
-    private let schedulerController: BreakSchedulerController
+    private let breakCycle: BreakCycle
     private let settingsStore: BreakSettingsStore
     private var windows: [NSWindow] = []
 
-    init(schedulerController: BreakSchedulerController, settingsStore: BreakSettingsStore) {
-        self.schedulerController = schedulerController
+    private var sceneSession: BreakSceneSession?
+
+    init(breakCycle: BreakCycle, settingsStore: BreakSettingsStore) {
+        self.breakCycle = breakCycle
         self.settingsStore = settingsStore
     }
 
@@ -31,8 +33,10 @@ final class BreakOverlayManager: RestOverlayWindows {
     func present(sceneMode: BreakSceneMode) {
         guard windows.isEmpty else { return }
 
+        let session = sceneMode.makeSession()
+        sceneSession = session
         windows = NSScreen.screens.map { screen in
-            makeWindow(for: screen, sceneMode: sceneMode)
+            makeWindow(for: screen, sceneMode: sceneMode, sceneSession: session)
         }
         windows.forEach { $0.makeKeyAndOrderFront(nil) }
     }
@@ -41,11 +45,13 @@ final class BreakOverlayManager: RestOverlayWindows {
     func dismiss() {
         windows.forEach { $0.close() }
         windows.removeAll()
+        sceneSession = nil
     }
 
     private func makeWindow(
         for screen: NSScreen,
-        sceneMode: BreakSceneMode
+        sceneMode: BreakSceneMode,
+        sceneSession: BreakSceneSession
     ) -> NSWindow {
         let window = OverlayWindow(
             contentRect: screen.frame,
@@ -70,9 +76,10 @@ final class BreakOverlayManager: RestOverlayWindows {
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(
             rootView: BreakOverlayView(
-                schedulerController: schedulerController,
+                breakCycle: breakCycle,
                 sceneMode: sceneMode,
-                settingsStore: settingsStore
+                settingsStore: settingsStore,
+                sceneSession: sceneSession
             )
         )
         return window

@@ -6,13 +6,13 @@ import Combine
 /// menu (which desyncs hover highlight).
 @MainActor
 final class MenuBarLiveStatusTitleUpdater {
-    private let schedulerController: BreakSchedulerController
+    private let breakCycle: BreakCycle
     private var trackingObservers: [NSObjectProtocol] = []
-    private var countdownCancellable: AnyCancellable?
+    private var remainingCancellable: AnyCancellable?
     private weak var trackedMenu: NSMenu?
 
-    init(schedulerController: BreakSchedulerController) {
-        self.schedulerController = schedulerController
+    init(breakCycle: BreakCycle) {
+        self.breakCycle = breakCycle
     }
 
     func start() {
@@ -40,7 +40,7 @@ final class MenuBarLiveStatusTitleUpdater {
         }
         trackingObservers = [begin, end]
 
-        countdownCancellable = schedulerController.countdown.$remaining
+        remainingCancellable = breakCycle.remaining.$seconds
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refreshTrackedStatusTitle()
@@ -64,7 +64,7 @@ final class MenuBarLiveStatusTitleUpdater {
 
     private func refreshTrackedStatusTitle() {
         guard let menu = trackedMenu, !menu.items.isEmpty else { return }
-        menu.items[0].title = schedulerController.menuStatusLine
+        menu.items[0].title = breakCycle.statusLine
     }
 
     private static func isWeshomeBreakMenu(_ menu: NSMenu) -> Bool {

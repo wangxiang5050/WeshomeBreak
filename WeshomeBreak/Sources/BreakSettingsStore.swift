@@ -10,8 +10,8 @@ import GrillBreakCore
 /// Deliberately plain `UserDefaults` reads/writes (rather than
 /// `@AppStorage`) so that a plain `ObservableObject` class — not just a
 /// SwiftUI `View` — can hold these properties and have consumers like
-/// `BreakSchedulerController` (a `Timer`-driven class, not a view) react to
-/// duration changes via `onDurationChange`.
+/// `BreakCycle` (a `Timer`-driven class, not a view) react to duration
+/// changes via `onDurationChange`.
 @MainActor
 final class BreakSettingsStore: ObservableObject {
     /// The `sceneModeSelectionRaw` value meaning "randomly rotate between
@@ -36,7 +36,7 @@ final class BreakSettingsStore: ObservableObject {
     }
 
     /// Invoked after `workDuration`/`breakDuration` changes.
-    /// `BreakSchedulerController` uses this to re-derive the scheduler's
+    /// `BreakCycle` uses this to re-derive the scheduler's
     /// strategy. No other setting needs a reactive hook: skip/delay
     /// permissions and scene mode selection are read directly (via
     /// `@ObservedObject`/property access) at the point they're needed,

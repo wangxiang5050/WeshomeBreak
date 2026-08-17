@@ -7,27 +7,35 @@ import WebKit
 /// (Staff Melody Page HTML → SVG inside WKWebView). Empty Melody Library →
 /// actionable empty state; countdown remains the overlay's responsibility.
 struct StaffMelodySceneMode: BreakSceneMode {
-    let identifier = StaffMelodyVisibility.sceneModeIdentifier
+    let identifier = StaffMelodySceneSession.sceneModeIdentifier
     let displayName = "五线谱旋律"
 
     let library: MelodyLibrary
 
     @MainActor
+    func makeSession() -> BreakSceneSession { StaffMelodySceneSession() }
+
+    @MainActor
     func makeView() -> AnyView {
+        makeView(session: makeSession())
+    }
+
+    @MainActor
+    func makeView(session: BreakSceneSession) -> AnyView {
         let page = StaffMelodyPage.prepare(from: library)
-        return AnyView(StaffMelodySceneView(page: page))
+        return AnyView(StaffMelodySceneView(page: page, session: session))
     }
 }
 
 struct StaffMelodySceneView: View {
     let page: StaffMelodyPage
-    @Environment(\.staffMelodyContentVisible) private var isContentVisible
+    @ObservedObject var session: BreakSceneSession
 
     var body: some View {
         ZStack {
             background
 
-            if isContentVisible {
+            if session.showsContent {
                 switch page {
                 case .empty:
                     emptyState

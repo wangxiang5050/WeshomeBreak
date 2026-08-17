@@ -3,14 +3,15 @@ import SwiftUI
 
 /// The full-screen break overlay's content: the current `BreakSceneMode`'s
 /// visual filling the screen, a remaining-time countdown in the corner, and
-/// a skip/delay/Staff Melody Visibility control bar that stays hidden until
+/// a hover control bar (scene chrome + skip/delay) that stays hidden until
 /// the mouse moves — like a video player's controls — so it never distracts
 /// from the break visual.
 struct BreakOverlayView: View {
-    @ObservedObject var schedulerController: BreakSchedulerController
-    @ObservedObject private var countdown: BreakCountdown
+    @ObservedObject var breakCycle: BreakCycle
+    @ObservedObject private var remaining: BreakCycle.Remaining
     let sceneMode: BreakSceneMode
     @ObservedObject var settingsStore: BreakSettingsStore
+    @ObservedObject var sceneSession: BreakSceneSession
 
     /// Whether the skip/delay control bar is currently visible. Flips to
     /// `true` on any mouse movement over the overlay, then automatically
@@ -18,43 +19,40 @@ struct BreakOverlayView: View {
     /// movement — mirroring how video player controls behave.
     @State private var isControlBarVisible = false
     @State private var autoHideGeneration = 0
-    /// Session-scoped for this break presentation; a new overlay starts visible.
-    @State private var staffMelodyVisibility = StaffMelodyVisibility()
 
     private static let controlBarAutoHideDelay: Duration = .seconds(2.5)
 
     init(
-        schedulerController: BreakSchedulerController,
+        breakCycle: BreakCycle,
         sceneMode: BreakSceneMode,
-        settingsStore: BreakSettingsStore
+        settingsStore: BreakSettingsStore,
+        sceneSession: BreakSceneSession
     ) {
-        self.schedulerController = schedulerController
-        self._countdown = ObservedObject(wrappedValue: schedulerController.countdown)
+        self.breakCycle = breakCycle
+        self._remaining = ObservedObject(wrappedValue: breakCycle.remaining)
         self.sceneMode = sceneMode
         self.settingsStore = settingsStore
+        self.sceneSession = sceneSession
     }
 
-    private var controlBarPolicy: BreakOverlayControlBarPolicy {
-        BreakOverlayControlBarPolicy(
-            allowSkip: settingsStore.allowSkip,
-            allowDelay: settingsStore.allowDelay,
-            sceneModeIdentifier: sceneMode.identifier
-        )
+    private var showsHoverBar: Bool {
+        sceneSession.hoverBarExtraTitle != nil
+            || settingsStore.allowSkip
+            || settingsStore.allowDelay
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            sceneMode.makeView()
-                .environment(\.staffMelodyContentVisible, staffMelodyVisibility.isContentVisible)
+            sceneMode.makeView(session: sceneSession)
                 .ignoresSafeArea()
 
-            Text(countdown.formattedRemaining)
+            Text(remaining.formatted)
                 .font(.system(size: 22, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
 
-            if controlBarPolicy.shouldShowControlBar {
+            if showsHoverBar {
                 controlBar
                     .opacity(isControlBarVisible ? 1 : 0)
                     .allowsHitTesting(isControlBarVisible)
@@ -70,19 +68,19 @@ struct BreakOverlayView: View {
 
     private var controlBar: some View {
         HStack(spacing: 16) {
-            if controlBarPolicy.showsStaffMelodyVisibilityToggle {
-                Button(staffMelodyVisibility.toggleTitle) {
-                    staffMelodyVisibility.toggle()
+            if let title = sceneSession.hoverBarExtraTitle {
+                Button(title) {
+                    sceneSession.performHoverBarExtra()
                 }
             }
-            if controlBarPolicy.showsSkip {
+            if settingsStore.allowSkip {
                 Button("跳过本次休息") {
-                    schedulerController.skipBreak()
+                    breakCycle.skipBreak()
                 }
             }
-            if controlBarPolicy.showsDelay {
+            if settingsStore.allowDelay {
                 Button("延迟休息") {
-                    schedulerController.delayBreak()
+                    breakCycle.delayBreak()
                 }
             }
         }

@@ -95,7 +95,7 @@
 
 - 好的测试只验证外部可观察行为(状态转换的结果、时间到达后触发了什么动作),不测试内部实现细节(比如具体用了哪个 Timer API)。测试打在模块的 **interface** 上,与调用方走同一条 seam。架构规则见 `CODING_STANDARDS.md`。
 - 默认测试 seam 在 `GrillBreakCore`(纯逻辑,不依赖 SwiftUI/AppKit)。不测试 SwiftUI/AppKit 视图层本身(菜单栏 UI、全屏遮罩窗口渲染)。
-- App target 上的测试只覆盖无法放进 Core 的深模块,且该模块必须已是真实 seam(生产 adapter + 测试 adapter)。先例:`RestOverlay.sync(phase:)` 通过 recording `RestOverlayWindows`,不打开真实 `NSWindow`。
+- App target 上的测试只覆盖无法放进 Core 的深模块,且该模块必须已是真实 seam(生产 adapter + 测试 adapter),或与调用方共用同一条 in-process `tick()` seam。先例:`RestOverlay.sync(phase:)` 通过 recording `RestOverlayWindows`,不打开真实 `NSWindow`;`BreakCycle` 通过 fake clock 的 `tick()` 验证 phase 按事件发布、remaining 按秒更新,不启动生产 `Timer`。
 - 需要覆盖测试的核心逻辑包括:
   - 简单循环调度器:给定工作/休息时长,验证在到达对应时间点后正确地在「工作」与「休息」两种状态之间转换。
   - 全屏应用/勿扰模式检测命中时,休息触发被推迟,条件解除后能补触发(可通过对检测结果的抽象/依赖注入来模拟这两种环境状态,不依赖真实系统 API)。
@@ -104,7 +104,7 @@
   - `BreakSceneMode` 注册与选择逻辑:固定模式选择返回指定模式;随机轮换在多个模式下不会连续两次选中同一个模式。
   - MusicXML 导入门禁:超集/多 Part/多 Voice 等被拒绝;合法子集(含三连音、Beam、Tie 等约定)可接受;多于 8 小节产生警告仍可导入。
 - 测试框架使用 Swift Testing(而非 XCTest),与项目最低支持 macOS 14.0+ 的技术栈保持一致。
-- `GrillBreakCore` 测试是领域逻辑的先例;App 层深模块的先例是 `WeshomeBreakTests` 中的 Rest Overlay(recording 窗口 adapter,不测视图渲染)。
+- `GrillBreakCore` 测试是领域逻辑的先例(含 Staff Melody Scene chrome:`StaffMelodySceneSession`)。App 层深模块的先例是 `WeshomeBreakTests` 中的 Rest Overlay(recording 窗口 adapter,不测视图渲染)与 Break Cycle(fake clock,不测 `NSMenu` / `Timer`)。
 
 ## Out of Scope
 

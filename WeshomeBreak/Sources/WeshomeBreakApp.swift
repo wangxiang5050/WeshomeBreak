@@ -3,7 +3,7 @@ import SwiftUI
 
 @main
 struct WeshomeBreakApp: App {
-    @StateObject private var schedulerController: BreakSchedulerController
+    @StateObject private var breakCycle: BreakCycle
     @StateObject private var settingsStore: BreakSettingsStore
     @StateObject private var melodyLibraryStore: MelodyLibraryStore
     private let restOverlay: RestOverlay
@@ -17,28 +17,28 @@ struct WeshomeBreakApp: App {
         let sceneModes: [BreakSceneMode] = [
             StaffMelodySceneMode(library: melodyLibrary)
         ]
-        let controller = BreakSchedulerController(settingsStore: settingsStore)
+        let breakCycle = BreakCycle(settingsStore: settingsStore)
 
         _settingsStore = StateObject(wrappedValue: settingsStore)
         _melodyLibraryStore = StateObject(wrappedValue: melodyLibraryStore)
-        _schedulerController = StateObject(wrappedValue: controller)
+        _breakCycle = StateObject(wrappedValue: breakCycle)
         availableSceneModes = sceneModes
         restOverlay = RestOverlay(
             settingsStore: settingsStore,
             sceneModeRegistry: BreakSceneModeRegistry(modes: sceneModes),
             windows: BreakOverlayManager(
-                schedulerController: controller,
+                breakCycle: breakCycle,
                 settingsStore: settingsStore
             )
         )
-        restOverlay.start(observing: controller)
-        menuStatusTitleUpdater = MenuBarLiveStatusTitleUpdater(schedulerController: controller)
+        restOverlay.start(observing: breakCycle)
+        menuStatusTitleUpdater = MenuBarLiveStatusTitleUpdater(breakCycle: breakCycle)
         menuStatusTitleUpdater.start()
     }
 
     var body: some Scene {
         MenuBarExtra("Weshome Break", systemImage: "cup.and.saucer.fill") {
-            MenuBarContentView(schedulerController: schedulerController)
+            MenuBarContentView(breakCycle: breakCycle)
         }
         .menuBarExtraStyle(.menu)
 

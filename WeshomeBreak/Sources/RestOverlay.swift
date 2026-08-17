@@ -30,10 +30,10 @@ final class RestOverlay {
         self.windows = windows
     }
 
-    /// Observes the scheduler's phase and keeps the covering in sync.
-    func start(observing schedulerController: BreakSchedulerController) {
-        sync(phase: schedulerController.phase)
-        cancellable = schedulerController.$phase
+    /// Observes Break Cycle phase (event rate) and keeps the covering in sync.
+    func start(observing breakCycle: BreakCycle) {
+        sync(phase: breakCycle.phase)
+        cancellable = breakCycle.$phase
             .removeDuplicates()
             .sink { [weak self] phase in
                 self?.sync(phase: phase)

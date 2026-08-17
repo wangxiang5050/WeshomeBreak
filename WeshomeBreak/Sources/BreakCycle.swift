@@ -1,17 +1,17 @@
+import Combine
 import Foundation
 import GrillBreakCore
 
-/// Owns the `GrillBreakCore.BreakScheduler` for the running app and bridges
-/// it into SwiftUI: drives it with a repeating `Timer` and republishes
-/// phase/pause as `@Published` properties. Per-second remaining time lives on
-/// `countdown` so menu-bar SwiftUI content is not rebuilt every tick.
+/// App observation of the running Break Cycle: phase/pause at event rate,
+/// remaining at one-second rate. Menu live-title and overlay countdown are
+/// adapters; `BreakScheduler` stays the Core state machine.
 @MainActor
-final class BreakSchedulerController: ObservableObject {
+final class BreakCycle: ObservableObject {
     @Published private(set) var phase: BreakPhase
     @Published private(set) var isPaused: Bool
-    /// Per-second remaining time. Observed by the overlay via `countdown`,
-    /// not via this object's `objectWillChange` (see `BreakCountdown`).
-    let countdown: BreakCountdown
+    /// Per-second remaining. Observing this does not fire `objectWillChange`
+    /// on the cycle, so menu-bar SwiftUI content is not rebuilt every tick.
+    let remaining: Remaining
 
     private let scheduler: BreakScheduler
     private let settingsStore: BreakSettingsStore
@@ -19,7 +19,8 @@ final class BreakSchedulerController: ObservableObject {
 
     init(
         scheduler: BreakScheduler? = nil,
-        settingsStore: BreakSettingsStore
+        settingsStore: BreakSettingsStore,
+        runsTimer: Bool = true
     ) {
         self.settingsStore = settingsStore
         self.scheduler = scheduler ?? BreakScheduler(
@@ -31,8 +32,10 @@ final class BreakSchedulerController: ObservableObject {
         )
         self.phase = self.scheduler.phase
         self.isPaused = self.scheduler.isPaused
-        self.countdown = BreakCountdown(remaining: self.scheduler.remaining)
-        startTicking()
+        self.remaining = Remaining(seconds: self.scheduler.remaining)
+        if runsTimer {
+            startTicking()
+        }
 
         settingsStore.onDurationChange = { [weak self] in
             self?.applyScheduleSettings()
@@ -44,11 +47,8 @@ final class BreakSchedulerController: ObservableObject {
     }
 
     /// Re-derives the scheduler's strategy from the settings store's current
-    /// work/rest durations. Called once up front isn't necessary — the
-    /// scheduler is already constructed with those values — this only fires
-    /// on subsequent changes, via `settingsStore.onChange`. Takes effect
-    /// immediately, including on whichever phase is currently running (see
-    /// `BreakScheduler.updateStrategy(_:)`).
+    /// work/rest durations. Takes effect immediately, including on whichever
+    /// phase is currently running (see `BreakScheduler.updateStrategy(_:)`).
     private func applyScheduleSettings() {
         scheduler.updateStrategy(
             SimpleCycleSchedule(
@@ -69,13 +69,14 @@ final class BreakSchedulerController: ObservableObject {
         self.timer = timer
     }
 
-    private func tick() {
+    /// Drives the scheduler one step and republishes. Production Timer and
+    /// tests share this seam; tests inject a fake clock and call `tick()`
+    /// without starting the Timer.
+    func tick() {
         scheduler.tick()
         refreshPublishedState()
     }
 
-    /// Toggles between paused and running, matching the menu bar's single
-    /// "暂停/继续" entry whose label flips based on `isPaused`.
     func togglePause() {
         if scheduler.isPaused {
             scheduler.resume()
@@ -85,29 +86,18 @@ final class BreakSchedulerController: ObservableObject {
         refreshPublishedState()
     }
 
-    /// Ends the current rest immediately; the next rest only triggers after
-    /// a full work duration. A no-op unless currently resting, or skipping
-    /// is disallowed in settings.
     func skipBreak() {
         guard settingsStore.allowSkip else { return }
         scheduler.skip()
         refreshPublishedState()
     }
 
-    /// Ends the current rest immediately, re-triggering the same rest after
-    /// `interval` (defaulting to the settings panel's configured delay
-    /// length). Callable repeatedly with no limit. A no-op unless currently
-    /// resting, or delaying is disallowed in settings.
     func delayBreak(by interval: TimeInterval? = nil) {
         guard settingsStore.allowDelay else { return }
         scheduler.delay(by: interval ?? settingsStore.delayInterval)
         refreshPublishedState()
     }
 
-    /// Manually starts a rest right now, without waiting for the work timer
-    /// to finish. Drives the exact same `phase` transition an automatic
-    /// trigger would, so Rest Overlay's phase observation presents the
-    /// covering via the identical path. A no-op unless currently working.
     func startBreakNow() {
         scheduler.startBreakNow()
         refreshPublishedState()
@@ -116,25 +106,21 @@ final class BreakSchedulerController: ObservableObject {
     private func refreshPublishedState() {
         let newPhase = scheduler.phase
         let newPaused = scheduler.isPaused
-        // Only publish when menu-relevant fields change. Assigning every tick
-        // (even with equal values) would still fire `objectWillChange` and
-        // rebuild an open MenuBarExtra `.menu`.
         if phase != newPhase {
             phase = newPhase
         }
         if isPaused != newPaused {
             isPaused = newPaused
         }
-        countdown.update(scheduler.remaining)
+        remaining.update(scheduler.remaining)
     }
 
-    /// `remaining` formatted as `mm:ss` for the menu-bar status line.
     var formattedRemaining: String {
-        countdown.formattedRemaining
+        remaining.formatted
     }
 
     /// Menu-bar status header: phase (or paused) plus remaining `mm:ss`.
-    var menuStatusLine: String {
+    var statusLine: String {
         let phaseLabel: String
         switch phase {
         case .working: phaseLabel = "工作中"
@@ -142,5 +128,29 @@ final class BreakSchedulerController: ObservableObject {
         }
         let label = isPaused ? "已暂停" : phaseLabel
         return "\(label) · 剩余 \(formattedRemaining)"
+    }
+
+    /// Per-second remaining time for surfaces that must tick every second
+    /// (overlay countdown, live menu title). Not a peer module.
+    @MainActor
+    final class Remaining: ObservableObject {
+        @Published private(set) var seconds: TimeInterval
+
+        init(seconds: TimeInterval = 0) {
+            self.seconds = seconds
+        }
+
+        func update(_ value: TimeInterval) {
+            if seconds != value {
+                seconds = value
+            }
+        }
+
+        var formatted: String {
+            let totalSeconds = max(0, Int(seconds.rounded()))
+            let minutes = totalSeconds / 60
+            let remainder = totalSeconds % 60
+            return String(format: "%02d:%02d", minutes, remainder)
+        }
     }
 }

@@ -16,4 +16,20 @@ public protocol BreakSceneMode: Sendable {
     /// Builds this mode's full-screen visual. Called on the main actor,
     /// once per overlay presentation.
     @MainActor func makeView() -> AnyView
+
+    /// Chrome for this overlay presentation. Overlay holds the session for
+    /// the hover bar; `makeView(session:)` receives the same instance.
+    @MainActor func makeSession() -> BreakSceneSession
+
+    /// Builds the visual bound to `session` so content and hover chrome share
+    /// state. Default ignores the session and calls `makeView()`.
+    @MainActor func makeView(session: BreakSceneSession) -> AnyView
+}
+
+extension BreakSceneMode {
+    @MainActor
+    public func makeSession() -> BreakSceneSession { BreakSceneSession() }
+
+    @MainActor
+    public func makeView(session: BreakSceneSession) -> AnyView { makeView() }
 }
