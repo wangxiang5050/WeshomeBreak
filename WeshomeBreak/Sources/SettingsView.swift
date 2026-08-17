@@ -12,6 +12,8 @@ struct SettingsView: View {
     let availableSceneModes: [BreakSceneMode]
 
     @State private var isImporting = false
+    @State private var editingTitles: [UUID: String] = [:]
+    @FocusState private var focusedMelodyID: UUID?
 
     private static let durationRange: ClosedRange<Double> = 1...120
     private static let delayRange: ClosedRange<Double> = 1...60
@@ -90,6 +92,15 @@ struct SettingsView: View {
         ) { result in
             handleImport(result)
         }
+        .onChange(of: focusedMelodyID) { oldValue, newValue in
+            guard let oldValue, oldValue != newValue else { return }
+            commitTitle(id: oldValue)
+        }
+        .onDisappear {
+            if let focusedMelodyID {
+                commitTitle(id: focusedMelodyID)
+            }
+        }
     }
 
     private func melodyRow(_ melody: UserMelody) -> some View {
@@ -105,7 +116,11 @@ struct SettingsView: View {
             .help("设为当前旋律")
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(melody.title)
+                TextField("名称", text: titleBinding(for: melody))
+                    .textFieldStyle(.plain)
+                    .focused($focusedMelodyID, equals: melody.id)
+                    .onSubmit { commitTitle(id: melody.id) }
+                    .accessibilityLabel("旋律名称")
                 Text("\(melody.measureCount) 小节")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -148,6 +163,27 @@ struct SettingsView: View {
             }
             melodyLibraryStore.importFile(at: url)
         }
+    }
+
+    private func titleBinding(for melody: UserMelody) -> Binding<String> {
+        Binding(
+            get: { editingTitles[melody.id] ?? melody.title },
+            set: { editingTitles[melody.id] = $0 }
+        )
+    }
+
+    private func commitTitle(id: UUID) {
+        guard let melody = melodyLibraryStore.melodies.first(where: { $0.id == id }) else {
+            editingTitles[id] = nil
+            return
+        }
+        let draft = editingTitles[id] ?? melody.title
+        if draft.trimmingCharacters(in: .whitespacesAndNewlines) == melody.title {
+            editingTitles[id] = nil
+            return
+        }
+        melodyLibraryStore.rename(id: id, to: draft)
+        editingTitles[id] = nil
     }
 
     private func durationRow(title: String, minutes: Binding<Double>, range: ClosedRange<Double>) -> some View {

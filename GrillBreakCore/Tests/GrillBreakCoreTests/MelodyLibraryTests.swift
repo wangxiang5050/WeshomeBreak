@@ -171,6 +171,198 @@ struct MelodyLibraryTests {
         }
         #expect(library.melodies().count == 1)
     }
+
+    @Test("importing a file uses the filename stem as the melody title")
+    func importFileUsesFilenameStemAsTitle() throws {
+        let (library, root) = try makeLibrary()
+        defer { cleanup(root) }
+
+        let fileURL = root.appendingPathComponent("小星星.musicxml")
+        try MusicXMLFixtures.simpleFourMeasures.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let outcome = library.importFile(at: fileURL)
+        guard case .imported(let melody, _) = outcome else {
+            Issue.record("expected imported, got \(outcome)")
+            return
+        }
+        #expect(melody.title == "小星星")
+        #expect(library.melodies().first?.title == "小星星")
+    }
+
+    @Test("importing a .xml file uses the filename stem as the melody title")
+    func importXMLFileUsesFilenameStemAsTitle() throws {
+        let (library, root) = try makeLibrary()
+        defer { cleanup(root) }
+
+        let fileURL = root.appendingPathComponent("练习.xml")
+        try MusicXMLFixtures.twoMeasures.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let outcome = library.importFile(at: fileURL)
+        guard case .imported(let melody, _) = outcome else {
+            Issue.record("expected imported, got \(outcome)")
+            return
+        }
+        #expect(melody.title == "练习")
+    }
+
+    @Test("importing a file with an empty filename stem is rejected")
+    func importFileRejectsEmptyFilenameStem() throws {
+        let (library, root) = try makeLibrary()
+        defer { cleanup(root) }
+
+        let fileURL = root.appendingPathComponent(".musicxml")
+        try MusicXMLFixtures.simpleFourMeasures.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let outcome = library.importFile(at: fileURL)
+        guard case .rejected(let reason) = outcome else {
+            Issue.record("expected rejected, got \(outcome)")
+            return
+        }
+        #expect(reason == "文件名无效，请使用带主文件名的 .musicxml、.mxl 或 .xml。")
+        #expect(library.melodies().isEmpty)
+    }
+
+    @Test("importing a duplicate filename stem appends the next free number")
+    func importFileUniquifiesDuplicateFilenameStem() throws {
+        let (library, root) = try makeLibrary()
+        defer { cleanup(root) }
+
+        func writeFixture(_ xml: String, named name: String, under directory: URL) throws -> URL {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let fileURL = directory.appendingPathComponent(name)
+            try xml.write(to: fileURL, atomically: true, encoding: .utf8)
+            return fileURL
+        }
+
+        let first = try writeFixture(
+            MusicXMLFixtures.simpleFourMeasures,
+            named: "小星星.musicxml",
+            under: root.appendingPathComponent("a", isDirectory: true)
+        )
+        let second = try writeFixture(
+            MusicXMLFixtures.twoMeasures,
+            named: "小星星.musicxml",
+            under: root.appendingPathComponent("b", isDirectory: true)
+        )
+        let third = try writeFixture(
+            MusicXMLFixtures.twoMeasures,
+            named: "小星星.musicxml",
+            under: root.appendingPathComponent("c", isDirectory: true)
+        )
+
+        guard case .imported(let firstMelody, _) = library.importFile(at: first) else {
+            Issue.record("first import failed")
+            return
+        }
+        guard case .imported(let secondMelody, _) = library.importFile(at: second) else {
+            Issue.record("second import failed")
+            return
+        }
+        guard case .imported(let thirdMelody, _) = library.importFile(at: third) else {
+            Issue.record("third import failed")
+            return
+        }
+        #expect(firstMelody.title == "小星星")
+        #expect(secondMelody.title == "小星星 2")
+        #expect(thirdMelody.title == "小星星 3")
+    }
+
+    @Test("importing MusicXML without a file uses 未命名旋律")
+    func importMusicXMLUsesDefaultTitle() throws {
+        let (library, root) = try makeLibrary()
+        defer { cleanup(root) }
+
+        guard case .imported(let first, _) = library.importMusicXML(MusicXMLFixtures.simpleFourMeasures) else {
+            Issue.record("first import failed")
+            return
+        }
+        guard case .imported(let second, _) = library.importMusicXML(MusicXMLFixtures.twoMeasures) else {
+            Issue.record("second import failed")
+            return
+        }
+        #expect(first.title == "未命名旋律")
+        #expect(second.title == "未命名旋律 2")
+    }
+
+    @Test("a filename stem that already looks numbered is not parsed as a suffix")
+    func importFileDoesNotParseExistingNumberSuffix() throws {
+        let (library, root) = try makeLibrary()
+        defer { cleanup(root) }
+
+        let firstDir = root.appendingPathComponent("a", isDirectory: true)
+        try FileManager.default.createDirectory(at: firstDir, withIntermediateDirectories: true)
+        let first = firstDir.appendingPathComponent("小星星 2.musicxml")
+        try MusicXMLFixtures.simpleFourMeasures.write(to: first, atomically: true, encoding: .utf8)
+        let secondDir = root.appendingPathComponent("b", isDirectory: true)
+        try FileManager.default.createDirectory(at: secondDir, withIntermediateDirectories: true)
+        let second = secondDir.appendingPathComponent("小星星 2.musicxml")
+        try MusicXMLFixtures.twoMeasures.write(to: second, atomically: true, encoding: .utf8)
+
+        guard case .imported(let firstMelody, _) = library.importFile(at: first) else {
+            Issue.record("first import failed")
+            return
+        }
+        guard case .imported(let secondMelody, _) = library.importFile(at: second) else {
+            Issue.record("second import failed")
+            return
+        }
+        #expect(firstMelody.title == "小星星 2")
+        #expect(secondMelody.title == "小星星 2 2")
+    }
+
+    @Test("renaming a melody persists across reload")
+    func renamePersistsAcrossReload() throws {
+        let (library, root) = try makeLibrary()
+        defer { cleanup(root) }
+
+        guard case .imported(let melody, _) = library.importMusicXML(MusicXMLFixtures.twoMeasures) else {
+            Issue.record("import failed")
+            return
+        }
+        try library.rename(id: melody.id, to: "  练习曲  ")
+        #expect(library.melodies().first?.title == "练习曲")
+
+        let reloaded = MelodyLibrary(rootDirectory: root)
+        #expect(reloaded.melodies().first?.title == "练习曲")
+        #expect(reloaded.melodies().first?.id == melody.id)
+    }
+
+    @Test("renaming to a blank title is rejected and keeps the original")
+    func renameRejectsEmptyTitle() throws {
+        let (library, root) = try makeLibrary()
+        defer { cleanup(root) }
+
+        guard case .imported(let melody, _) = library.importMusicXML(MusicXMLFixtures.twoMeasures) else {
+            Issue.record("import failed")
+            return
+        }
+        #expect(throws: MelodyLibraryError.emptyTitle) {
+            try library.rename(id: melody.id, to: "   ")
+        }
+        #expect(library.melodies().first?.title == "未命名旋律")
+        #expect(MelodyLibraryError.emptyTitle.errorDescription == "名称不能为空。")
+    }
+
+    @Test("renaming to another melody's title is rejected")
+    func renameRejectsDuplicateTitle() throws {
+        let (library, root) = try makeLibrary()
+        defer { cleanup(root) }
+
+        guard case .imported(let first, _) = library.importMusicXML(MusicXMLFixtures.simpleFourMeasures) else {
+            Issue.record("first import failed")
+            return
+        }
+        guard case .imported(let second, _) = library.importMusicXML(MusicXMLFixtures.twoMeasures) else {
+            Issue.record("second import failed")
+            return
+        }
+        try library.rename(id: first.id, to: "小星星")
+        #expect(throws: MelodyLibraryError.duplicateTitle("小星星")) {
+            try library.rename(id: second.id, to: "小星星")
+        }
+        #expect(library.melodies().first { $0.id == second.id }?.title == "未命名旋律 2")
+        #expect(MelodyLibraryError.duplicateTitle("小星星").errorDescription == "已有同名旋律「小星星」。")
+    }
 }
 
 @Suite("MusicXMLFileLoader")

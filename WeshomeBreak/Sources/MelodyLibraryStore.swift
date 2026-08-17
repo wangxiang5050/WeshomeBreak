@@ -2,7 +2,7 @@ import Foundation
 import GrillBreakCore
 
 /// UI-facing wrapper around `MelodyLibrary`: republishes the melody list and
-/// current selection so Settings can refresh after import / select / delete,
+/// current selection so Settings can refresh after import / select / delete / rename,
 /// while the same underlying library instance feeds Staff Melody Scene.
 @MainActor
 final class MelodyLibraryStore: ObservableObject {
@@ -65,6 +65,13 @@ final class MelodyLibraryStore: ObservableObject {
     func delete(id: UUID) {
         applyMutation {
             try library.delete(id: id)
+            feedback = .none
+        }
+    }
+
+    func rename(id: UUID, to title: String) {
+        applyMutation {
+            try library.rename(id: id, to: title)
             feedback = .none
         }
     }

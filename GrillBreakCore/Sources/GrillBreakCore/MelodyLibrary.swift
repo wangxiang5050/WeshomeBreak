@@ -19,10 +19,30 @@ public enum MelodyImportOutcome: Equatable, Sendable {
     case rejected(reason: String)
 }
 
-public enum MelodyLibraryError: Error, Equatable, Sendable {
+public enum MelodyLibraryError: Error, Equatable, Sendable, LocalizedError {
     case melodyNotFound(UUID)
     case unsupportedFileExtension(String)
     case ioFailure(String)
+    case emptyTitle
+    case duplicateTitle(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .melodyNotFound(let id):
+            return "找不到旋律：\(id.uuidString)"
+        case .unsupportedFileExtension(let ext):
+            return """
+                不支持的文件扩展名：\(ext)。
+                建议导入 MuseScore 或 Audiveris 导出的 .musicxml / .mxl 文件。
+                """
+        case .ioFailure(let message):
+            return message
+        case .emptyTitle:
+            return "名称不能为空。"
+        case .duplicateTitle(let title):
+            return "已有同名旋律「\(title)」。"
+        }
+    }
 }
 
 /// Persists imported User Melodies under an injectable root directory and
@@ -90,21 +110,22 @@ public final class MelodyLibrary: @unchecked Sendable {
 
     @discardableResult
     public func importMusicXML(_ musicXML: String) -> MelodyImportOutcome {
-        switch gate.evaluate(musicXML) {
-        case .rejected(let reason):
-            return .rejected(reason: reason)
-        case .accepted(let draft):
-            return store(draft: draft)
-        }
+        importAccepted(musicXML, title: "未命名旋律")
     }
 
     @discardableResult
     public func importFile(at url: URL) -> MelodyImportOutcome {
+        if isSupportedMusicXMLURL(url), fileTitle(from: url) == nil {
+            return .rejected(reason: Self.emptyFilenameStemMessage)
+        }
         do {
             let musicXML = try fileLoader.loadString(from: url)
-            return importMusicXML(musicXML)
+            guard let title = fileTitle(from: url) else {
+                return .rejected(reason: Self.emptyFilenameStemMessage)
+            }
+            return importAccepted(musicXML, title: title)
         } catch let error as MelodyLibraryError {
-            return .rejected(reason: errorDescription(error))
+            return .rejected(reason: error.errorDescription ?? "")
         } catch {
             return .rejected(reason: MusicXMLFileLoader.unreadableFileMessage)
         }
@@ -133,10 +154,80 @@ public final class MelodyLibrary: @unchecked Sendable {
         }
     }
 
+    public func rename(id: UUID, to rawTitle: String) throws {
+        guard let index = manifest.melodies.firstIndex(where: { $0.id == id }) else {
+            throw MelodyLibraryError.melodyNotFound(id)
+        }
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            throw MelodyLibraryError.emptyTitle
+        }
+        if manifest.melodies.contains(where: { $0.id != id && $0.title == title }) {
+            throw MelodyLibraryError.duplicateTitle(title)
+        }
+        let existing = manifest.melodies[index]
+        if existing.title == title {
+            return
+        }
+        manifest.melodies[index] = UserMelody(
+            id: existing.id,
+            title: title,
+            measureCount: existing.measureCount
+        )
+        try saveManifest()
+    }
+
     // MARK: - Private
 
-    private func store(draft: ImportedMelodyDraft) -> MelodyImportOutcome {
-        let melody = UserMelody(title: draft.title, measureCount: draft.measureCount)
+    private static let emptyFilenameStemMessage = "文件名无效，请使用带主文件名的 .musicxml、.mxl 或 .xml。"
+    private static let supportedTitleExtensions: Set<String> = ["musicxml", "mxl", "xml"]
+
+    private func isBareSupportedFilename(_ url: URL) -> Bool {
+        switch url.lastPathComponent.lowercased() {
+        case ".musicxml", ".mxl", ".xml":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func isSupportedMusicXMLURL(_ url: URL) -> Bool {
+        isBareSupportedFilename(url)
+            || Self.supportedTitleExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    private func fileTitle(from url: URL) -> String? {
+        if isBareSupportedFilename(url) {
+            return nil
+        }
+        let stem = url.deletingPathExtension().lastPathComponent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return stem.isEmpty ? nil : stem
+    }
+
+    private func importAccepted(_ musicXML: String, title: String) -> MelodyImportOutcome {
+        switch gate.evaluate(musicXML) {
+        case .rejected(let reason):
+            return .rejected(reason: reason)
+        case .accepted(let draft):
+            return store(draft: draft, title: uniquifiedTitle(title))
+        }
+    }
+
+    private func uniquifiedTitle(_ base: String) -> String {
+        let taken = Set(manifest.melodies.map(\.title))
+        if !taken.contains(base) {
+            return base
+        }
+        var n = 2
+        while taken.contains("\(base) \(n)") {
+            n += 1
+        }
+        return "\(base) \(n)"
+    }
+
+    private func store(draft: ImportedMelodyDraft, title: String) -> MelodyImportOutcome {
+        let melody = UserMelody(title: title, measureCount: draft.measureCount)
         do {
             try draft.musicXML.write(to: scoreURL(for: melody.id), atomically: true, encoding: .utf8)
             manifest.melodies.append(melody)
@@ -166,20 +257,6 @@ public final class MelodyLibrary: @unchecked Sendable {
         try fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(manifest)
         try data.write(to: manifestURL, options: .atomic)
-    }
-
-    private func errorDescription(_ error: MelodyLibraryError) -> String {
-        switch error {
-        case .melodyNotFound(let id):
-            return "找不到旋律：\(id.uuidString)"
-        case .unsupportedFileExtension(let ext):
-            return """
-                不支持的文件扩展名：\(ext)。
-                建议导入 MuseScore 或 Audiveris 导出的 .musicxml / .mxl 文件。
-                """
-        case .ioFailure(let message):
-            return message
-        }
     }
 
     private struct Manifest: Codable {

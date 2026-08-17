@@ -10,13 +10,11 @@ public enum MusicXMLImportResult: Equatable, Sendable {
 
 /// A melody that passed the import gate and is ready to enter the Melody Library.
 public struct ImportedMelodyDraft: Equatable, Sendable {
-    public let title: String
     public let musicXML: String
     public let measureCount: Int
     public let warnings: [String]
 
-    public init(title: String, musicXML: String, measureCount: Int, warnings: [String] = []) {
-        self.title = title
+    public init(musicXML: String, measureCount: Int, warnings: [String] = []) {
         self.musicXML = musicXML
         self.measureCount = measureCount
         self.warnings = warnings
@@ -64,10 +62,8 @@ public struct MusicXMLImportGate: Sendable {
             warnings.append("小节数为 \(measureCount)，超过目标 8 小节；仍允许导入。")
         }
 
-        let title = extractTitle(from: root) ?? "未命名旋律"
         return .accepted(
             ImportedMelodyDraft(
-                title: title,
                 musicXML: musicXML,
                 measureCount: measureCount,
                 warnings: warnings
@@ -157,25 +153,6 @@ public struct MusicXMLImportGate: Sendable {
 
     private func countMeasures(in root: XMLElement) -> Int {
         elements(matching: ".//measure", in: root).count
-    }
-
-    private func extractTitle(from root: XMLElement) -> String? {
-        if let movement = elements(matching: "./movement-title", in: root).first?.stringValue?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !movement.isEmpty {
-            return movement
-        }
-        if let workTitle = elements(matching: "./work/work-title", in: root).first?.stringValue?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !workTitle.isEmpty {
-            return workTitle
-        }
-        if let partName = elements(matching: ".//part-name", in: root).first?.stringValue?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !partName.isEmpty {
-            return partName
-        }
-        return nil
     }
 
     private func elementExists(named name: String, in root: XMLElement) -> Bool {
