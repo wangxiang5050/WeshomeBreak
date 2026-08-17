@@ -9,25 +9,30 @@ private final class OverlayWindow: NSWindow {
     override var canBecomeKey: Bool { true }
 }
 
-/// Manages one full-screen `NSWindow` per connected display, each hosting
-/// `BreakOverlayView`. AppKit (not SwiftUI's `Window`/`WindowGroup`) is used
-/// here deliberately: SwiftUI has no API to precisely target "all current
-/// screens" with a window level above regular apps, which is required to
-/// reliably cover the Dock and menu bar during a break.
+/// AppKit adapter for Rest Overlay: one full-screen `NSWindow` per connected
+/// display, each hosting `BreakOverlayView`. SwiftUI has no API to precisely
+/// target "all current screens" with a window level above regular apps.
 @MainActor
-final class BreakOverlayManager {
+final class BreakOverlayManager: RestOverlayWindows {
+    private let schedulerController: BreakSchedulerController
+    private let settingsStore: BreakSettingsStore
     private var windows: [NSWindow] = []
+
+    init(schedulerController: BreakSchedulerController, settingsStore: BreakSettingsStore) {
+        self.schedulerController = schedulerController
+        self.settingsStore = settingsStore
+    }
 
     var isPresenting: Bool { !windows.isEmpty }
 
     /// Creates and shows one overlay window per screen currently connected.
     /// Calling this while overlays are already presented has no effect —
     /// call `dismiss()` first if you need to re-present.
-    func present(schedulerController: BreakSchedulerController, sceneMode: BreakSceneMode, settingsStore: BreakSettingsStore) {
+    func present(sceneMode: BreakSceneMode) {
         guard windows.isEmpty else { return }
 
         windows = NSScreen.screens.map { screen in
-            makeWindow(for: screen, schedulerController: schedulerController, sceneMode: sceneMode, settingsStore: settingsStore)
+            makeWindow(for: screen, sceneMode: sceneMode)
         }
         windows.forEach { $0.makeKeyAndOrderFront(nil) }
     }
@@ -40,9 +45,7 @@ final class BreakOverlayManager {
 
     private func makeWindow(
         for screen: NSScreen,
-        schedulerController: BreakSchedulerController,
-        sceneMode: BreakSceneMode,
-        settingsStore: BreakSettingsStore
+        sceneMode: BreakSceneMode
     ) -> NSWindow {
         let window = OverlayWindow(
             contentRect: screen.frame,
@@ -66,7 +69,11 @@ final class BreakOverlayManager {
         // lifetime exclusively through `windows`, so opt out.
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(
-            rootView: BreakOverlayView(schedulerController: schedulerController, sceneMode: sceneMode, settingsStore: settingsStore)
+            rootView: BreakOverlayView(
+                schedulerController: schedulerController,
+                sceneMode: sceneMode,
+                settingsStore: settingsStore
+            )
         )
         return window
     }

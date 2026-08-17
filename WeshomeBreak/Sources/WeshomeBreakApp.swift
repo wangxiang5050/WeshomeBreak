@@ -6,7 +6,7 @@ struct WeshomeBreakApp: App {
     @StateObject private var schedulerController: BreakSchedulerController
     @StateObject private var settingsStore: BreakSettingsStore
     @StateObject private var melodyLibraryStore: MelodyLibraryStore
-    private let overlayCoordinator: BreakOverlayCoordinator
+    private let restOverlay: RestOverlay
     private let menuStatusTitleUpdater: MenuBarLiveStatusTitleUpdater
     private let availableSceneModes: [BreakSceneMode]
 
@@ -23,12 +23,15 @@ struct WeshomeBreakApp: App {
         _melodyLibraryStore = StateObject(wrappedValue: melodyLibraryStore)
         _schedulerController = StateObject(wrappedValue: controller)
         availableSceneModes = sceneModes
-        overlayCoordinator = BreakOverlayCoordinator(
-            schedulerController: controller,
+        restOverlay = RestOverlay(
             settingsStore: settingsStore,
-            sceneModeRegistry: BreakSceneModeRegistry(modes: sceneModes)
+            sceneModeRegistry: BreakSceneModeRegistry(modes: sceneModes),
+            windows: BreakOverlayManager(
+                schedulerController: controller,
+                settingsStore: settingsStore
+            )
         )
-        overlayCoordinator.start()
+        restOverlay.start(observing: controller)
         menuStatusTitleUpdater = MenuBarLiveStatusTitleUpdater(schedulerController: controller)
         menuStatusTitleUpdater.start()
     }

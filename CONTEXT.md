@@ -4,8 +4,12 @@ Menu-bar macOS app that enforces work/break cycles with a full-screen rest overl
 
 ## Language
 
+**Rest Overlay**:
+The full-screen covering on every connected display during a break: Break Scene Mode, remaining-time countdown, and hover controls.
+_Avoid_: overlay manager, coordinator (those were shallow pass-through names)
+
 **Break Scene Mode**:
-A pluggable visual presentation shown on the rest overlay during a break.
+A pluggable visual presentation shown on the Rest Overlay during a break.
 _Avoid_: effect, theme, screensaver (unless clearly metaphorical)
 
 **Staff Melody Scene**:
@@ -53,7 +57,7 @@ Phase 1 displays accepted MusicXML by engraving with Verovio (SVG), not a from-s
 _Avoid_: treating Verovio as a reason to skip the import subset gate
 
 **Melody Library**:
-The set of imported User Melodies available to the Staff Melody Scene. Empty library shows an actionable empty state on the overlay (countdown still runs).
+The set of imported User Melodies available to the Staff Melody Scene. Empty library shows an actionable empty state on the Rest Overlay (countdown still runs).
 _Avoid_: playlist, catalog (unless UI copy)
 
 **Melody Selection**:
@@ -61,7 +65,7 @@ Which User Melody from the Melody Library is shown on the next Staff Melody Scen
 _Avoid_: mode selection, scene selection (those refer to Break Scene Mode)
 
 **Staff Melody Visibility**:
-Whether the Staff Melody Scene's content (engraved score, empty state, or failure copy) is shown on the rest overlay during the current break. Hiding clears that content area only; the break, countdown, and Break Scene Mode selection are unchanged. Session-scoped for one break — each new break starts visible again.
+Whether the Staff Melody Scene's content (engraved score, empty state, or failure copy) is shown on the Rest Overlay during the current break. Hiding clears that content area only; the break, countdown, and Break Scene Mode selection are unchanged. Session-scoped for one break — each new break starts visible again.
 _Avoid_: hide melody (ambiguous with deleting from the Melody Library), scene mode off, mute
 
 ## Distribution

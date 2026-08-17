@@ -34,8 +34,25 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.weshome.break
+        PRODUCT_MODULE_NAME: WeshomeBreak
         PRODUCT_NAME: "Weshome Break"
         ENABLE_HARDENED_RUNTIME: NO
         CODE_SIGN_ENTITLEMENTS: Sources/WeshomeBreak.entitlements
     dependencies:
       - package: GrillBreakCore
+    scheme:
+      testTargets:
+        - WeshomeBreakTests
+  WeshomeBreakTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.weshome.break.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Weshome Break.app/Contents/MacOS/Weshome Break"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+    dependencies:
+      - target: WeshomeBreak
