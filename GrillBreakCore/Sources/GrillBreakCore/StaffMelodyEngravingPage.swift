@@ -12,7 +12,12 @@ enum StaffMelodyEngravingPage {
     private static let maxNotationWidthPercent = 96.0
     private static let maxNotationMaxHeightPercent = 92.0
 
-    static func html(musicXML: String, scalePercent: Int) -> String {
+    static func html(
+        musicXML: String,
+        scalePercent: Int,
+        spacingCoefficientPercent: Int,
+        durationProportionPercent: Int
+    ) -> String {
         let laidOut =
             (try? MusicXMLSystemBreakLayout.applying(
                 measuresPerSystem: MusicXMLSystemBreakLayout.measuresPerSystem,
@@ -23,6 +28,8 @@ enum StaffMelodyEngravingPage {
         let notationWidthPercent = Self.formatted(maxNotationWidthPercent * fraction)
         let notationMaxHeightPercent = Self.formatted(maxNotationMaxHeightPercent * fraction)
         let pageWidth = MusicXMLSystemBreakLayout.pageWidth
+        let spacingLinear = Self.spacingFactor(spacingCoefficientPercent)
+        let spacingNonLinear = Self.spacingFactor(durationProportionPercent)
         return """
         <!DOCTYPE html>
         <html>
@@ -116,6 +123,8 @@ enum StaffMelodyEngravingPage {
                     scale: 100,
                     breaks: "encoded",
                     pageWidth: \(pageWidth),
+                    spacingLinear: \(spacingLinear),
+                    spacingNonLinear: \(spacingNonLinear),
                     adjustPageHeight: true,
                     footer: "none",
                     header: "none"
@@ -151,5 +160,10 @@ enum StaffMelodyEngravingPage {
     /// floating-point rounding noise from the `fraction` multiplication.
     private static func formatted(_ percent: Double) -> String {
         String(format: "%.1f", percent)
+    }
+
+    /// Verovio spacing factors are 0.0–1.0; settings store them as percent.
+    private static func spacingFactor(_ percent: Int) -> String {
+        String(format: "%.2f", Double(percent) / 100)
     }
 }

@@ -12,7 +12,12 @@ struct StaffMelodyPageTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let library = MelodyLibrary(rootDirectory: root)
-        let page = StaffMelodyPage.prepare(from: library, scalePercent: 60)
+        let page = StaffMelodyPage.prepare(
+            from: library,
+            scalePercent: 60,
+            spacingCoefficientPercent: 25,
+            durationProportionPercent: 60
+        )
 
         #expect(page == .empty)
     }
@@ -22,7 +27,12 @@ struct StaffMelodyPageTests {
         let (library, root) = try makeLibrary(importing: MusicXMLFixtures.simpleFourMeasures)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let page = StaffMelodyPage.prepare(from: library, scalePercent: 60)
+        let page = StaffMelodyPage.prepare(
+            from: library,
+            scalePercent: 60,
+            spacingCoefficientPercent: 25,
+            durationProportionPercent: 60
+        )
 
         guard case .ready(let html) = page else {
             Issue.record("expected ready page, got \(page)")
@@ -48,7 +58,12 @@ struct StaffMelodyPageTests {
         let scoreURL = root.appendingPathComponent("scores/\(melody.id.uuidString).musicxml")
         try FileManager.default.removeItem(at: scoreURL)
 
-        let page = StaffMelodyPage.prepare(from: library, scalePercent: 60)
+        let page = StaffMelodyPage.prepare(
+            from: library,
+            scalePercent: 60,
+            spacingCoefficientPercent: 25,
+            durationProportionPercent: 60
+        )
 
         guard case .failed(let message) = page else {
             Issue.record("expected failed page, got \(page)")
@@ -94,6 +109,18 @@ struct StaffMelodyPageTests {
     }
 
     @Test
+    func readyEmbedsRequestedSpacingFactors() throws {
+        let html = try readyHTML(
+            from: MusicXMLFixtures.simpleFourMeasures,
+            spacingCoefficientPercent: 40,
+            durationProportionPercent: 80
+        )
+
+        #expect(html.contains("spacingLinear: 0.40"))
+        #expect(html.contains("spacingNonLinear: 0.80"))
+    }
+
+    @Test
     func readySizesNotationContainerByRequestedScalePercent() throws {
         let atMax = try readyHTML(from: MusicXMLFixtures.nineMeasures, scalePercent: 100)
         #expect(atMax.contains("width: 96.0%;"))
@@ -133,11 +160,21 @@ struct StaffMelodyPageTests {
 
     // MARK: - Helpers
 
-    private func readyHTML(from musicXML: String, scalePercent: Int = 60) throws -> String {
+    private func readyHTML(
+        from musicXML: String,
+        scalePercent: Int = 60,
+        spacingCoefficientPercent: Int = 25,
+        durationProportionPercent: Int = 60
+    ) throws -> String {
         let (library, root) = try makeLibrary(importing: musicXML)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let page = StaffMelodyPage.prepare(from: library, scalePercent: scalePercent)
+        let page = StaffMelodyPage.prepare(
+            from: library,
+            scalePercent: scalePercent,
+            spacingCoefficientPercent: spacingCoefficientPercent,
+            durationProportionPercent: durationProportionPercent
+        )
         guard case .ready(let html) = page else {
             Issue.record("expected ready page, got \(page)")
             return ""

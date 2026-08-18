@@ -3,7 +3,8 @@ import GrillBreakCore
 
 /// Persists every user-configurable setting from ticket 07's settings panel
 /// (work/rest durations, skip/delay permissions + delay length, scene mode
-/// selection strategy, Staff Notation Scale) to `UserDefaults`, and
+/// selection strategy, Staff Notation Scale, Spacing Coefficient, Duration
+/// Proportion) to `UserDefaults`, and
 /// republishes them as `@Published` properties so the rest of the app
 /// updates live the moment a setting changes — no restart required.
 ///
@@ -26,11 +27,17 @@ final class BreakSettingsStore: ObservableObject {
         static let delayInterval = "settings.delayInterval"
         static let sceneModeSelection = "settings.sceneModeSelection"
         static let staffNotationScalePercent = "settings.staffNotationScalePercent"
+        static let spacingCoefficientPercent = "settings.spacingCoefficientPercent"
+        static let durationProportionPercent = "settings.durationProportionPercent"
     }
 
     /// Staff Notation Scale range offered in Settings: covers the
     /// pre-setting hardcoded values (40 and 60) with room either side.
     static let staffNotationScaleRange: ClosedRange<Int> = 40...100
+
+    /// Spacing Coefficient / Duration Proportion range: Verovio's
+    /// 0.05–1.0 as percent, matching the Stepper's 5-point steps.
+    static let noteSpacingPercentRange: ClosedRange<Int> = 5...100
 
     private enum Defaults {
         static let workDuration: TimeInterval = 20 * 60
@@ -39,6 +46,8 @@ final class BreakSettingsStore: ObservableObject {
         static let allowDelay = true
         static let delayInterval: TimeInterval = 5 * 60
         static let staffNotationScalePercent = 60
+        static let spacingCoefficientPercent = 25
+        static let durationProportionPercent = 60
     }
 
     /// Invoked after `workDuration`/`breakDuration` changes.
@@ -83,11 +92,21 @@ final class BreakSettingsStore: ObservableObject {
         didSet { persist(sceneModeSelectionRaw, forKey: Keys.sceneModeSelection) }
     }
 
-    /// Staff Notation Scale: the Verovio engraving `scale` (percent) applied
-    /// to both the Staff Melody Scene (read at the start of each break) and
+    /// Staff Notation Scale: sizes the notation container (percent) for
+    /// both the Staff Melody Scene (read at the start of each break) and
     /// the Melody Preview window (read live).
     @Published var staffNotationScalePercent: Int {
         didSet { persist(staffNotationScalePercent, forKey: Keys.staffNotationScalePercent) }
+    }
+
+    /// Spacing Coefficient: Verovio `spacingLinear` as percent (5–100).
+    @Published var spacingCoefficientPercent: Int {
+        didSet { persist(spacingCoefficientPercent, forKey: Keys.spacingCoefficientPercent) }
+    }
+
+    /// Duration Proportion: Verovio `spacingNonLinear` as percent (5–100).
+    @Published var durationProportionPercent: Int {
+        didSet { persist(durationProportionPercent, forKey: Keys.durationProportionPercent) }
     }
 
     private let defaults: UserDefaults
@@ -103,6 +122,10 @@ final class BreakSettingsStore: ObservableObject {
         sceneModeSelectionRaw = defaults.string(forKey: Keys.sceneModeSelection) ?? Self.randomSelectionValue
         staffNotationScalePercent = (defaults.object(forKey: Keys.staffNotationScalePercent) as? Int)
             ?? Defaults.staffNotationScalePercent
+        spacingCoefficientPercent = (defaults.object(forKey: Keys.spacingCoefficientPercent) as? Int)
+            ?? Defaults.spacingCoefficientPercent
+        durationProportionPercent = (defaults.object(forKey: Keys.durationProportionPercent) as? Int)
+            ?? Defaults.durationProportionPercent
     }
 
     private static func value(in defaults: UserDefaults, forKey key: String, default fallback: TimeInterval) -> TimeInterval {

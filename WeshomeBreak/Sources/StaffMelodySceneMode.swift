@@ -8,12 +8,17 @@ import WebKit
 /// actionable empty state; countdown remains the overlay's responsibility.
 extension StaffMelodyPage {
     /// Prepares the page for the library's current Melody Selection at the
-    /// currently configured Staff Notation Scale. Shared by the Staff Melody
-    /// Scene and the Melody Preview window so both read the setting the same
-    /// way.
+    /// currently configured Staff Notation Scale, Spacing Coefficient, and
+    /// Duration Proportion. Shared by the Staff Melody Scene and the Melody
+    /// Preview window so both read the settings the same way.
     @MainActor
     static func prepare(from library: MelodyLibrary, settingsStore: BreakSettingsStore) -> StaffMelodyPage {
-        prepare(from: library, scalePercent: settingsStore.staffNotationScalePercent)
+        prepare(
+            from: library,
+            scalePercent: settingsStore.staffNotationScalePercent,
+            spacingCoefficientPercent: settingsStore.spacingCoefficientPercent,
+            durationProportionPercent: settingsStore.durationProportionPercent
+        )
     }
 }
 
@@ -35,8 +40,8 @@ struct StaffMelodySceneMode: BreakSceneMode {
     @MainActor
     func makeView(session: BreakSceneSession) -> AnyView {
         // `BreakOverlayView` calls this once, when its window is created —
-        // a Staff Notation Scale change made mid-break takes effect starting
-        // the next break, not this one.
+        // a Staff Notation Scale / note-spacing change made mid-break takes
+        // effect starting the next break, not this one.
         let page = StaffMelodyPage.prepare(from: library, settingsStore: settingsStore)
         return AnyView(StaffMelodySceneView(page: page, session: session))
     }
