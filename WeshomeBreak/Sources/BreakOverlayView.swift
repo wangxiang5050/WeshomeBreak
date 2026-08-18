@@ -13,6 +13,13 @@ struct BreakOverlayView: View {
     @ObservedObject var settingsStore: BreakSettingsStore
     @ObservedObject var sceneSession: BreakSceneSession
 
+    /// Built once, when this break's overlay window is created — `body`
+    /// re-evaluates every second as `remaining` ticks, so calling
+    /// `sceneMode.makeView` from inside `body` would re-read whatever
+    /// scene-specific settings (e.g. Staff Notation Scale) exist right now,
+    /// applying a mid-break change immediately instead of at the next break.
+    private let sceneView: AnyView
+
     /// Whether the skip/delay control bar is currently visible. Flips to
     /// `true` on any mouse movement over the overlay, then automatically
     /// flips back to `false` after `controlBarAutoHideDelay` of no further
@@ -33,6 +40,7 @@ struct BreakOverlayView: View {
         self.sceneMode = sceneMode
         self.settingsStore = settingsStore
         self.sceneSession = sceneSession
+        self.sceneView = sceneMode.makeView(session: sceneSession)
     }
 
     private var showsHoverBar: Bool {
@@ -43,7 +51,7 @@ struct BreakOverlayView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            sceneMode.makeView(session: sceneSession)
+            sceneView
                 .ignoresSafeArea()
 
             Text(remaining.formatted)

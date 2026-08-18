@@ -6,11 +6,23 @@ import WebKit
 /// Staff Melody Scene: shows the current User Melody engraved by Verovio
 /// (Staff Melody Page HTML → SVG inside WKWebView). Empty Melody Library →
 /// actionable empty state; countdown remains the overlay's responsibility.
+extension StaffMelodyPage {
+    /// Prepares the page for the library's current Melody Selection at the
+    /// currently configured Staff Notation Scale. Shared by the Staff Melody
+    /// Scene and the Melody Preview window so both read the setting the same
+    /// way.
+    @MainActor
+    static func prepare(from library: MelodyLibrary, settingsStore: BreakSettingsStore) -> StaffMelodyPage {
+        prepare(from: library, scalePercent: settingsStore.staffNotationScalePercent)
+    }
+}
+
 struct StaffMelodySceneMode: BreakSceneMode {
     let identifier = StaffMelodySceneSession.sceneModeIdentifier
     let displayName = "五线谱旋律"
 
     let library: MelodyLibrary
+    let settingsStore: BreakSettingsStore
 
     @MainActor
     func makeSession() -> BreakSceneSession { StaffMelodySceneSession() }
@@ -22,7 +34,10 @@ struct StaffMelodySceneMode: BreakSceneMode {
 
     @MainActor
     func makeView(session: BreakSceneSession) -> AnyView {
-        let page = StaffMelodyPage.prepare(from: library)
+        // `BreakOverlayView` calls this once, when its window is created —
+        // a Staff Notation Scale change made mid-break takes effect starting
+        // the next break, not this one.
+        let page = StaffMelodyPage.prepare(from: library, settingsStore: settingsStore)
         return AnyView(StaffMelodySceneView(page: page, session: session))
     }
 }
@@ -33,28 +48,25 @@ struct StaffMelodySceneView: View {
 
     var body: some View {
         ZStack {
-            background
+            StaffMelodyEngravingBackground()
 
             if session.showsContent {
-                switch page {
-                case .empty:
-                    emptyState
-                case .ready(let html):
-                    // No light “print card”: engrave on the dark scene. Bottom
-                    // inset keeps the score clear of the skip/delay control bar.
-                    VerovioScoreView(html: html)
-                        .padding(.horizontal, 40)
-                        .padding(.top, 40)
-                        .padding(.bottom, 110)
-                case .failed(let message):
-                    messageState(message)
-                }
+                // Bottom inset keeps the score clear of the skip/delay
+                // control bar; the Melody Preview window has no such bar.
+                StaffMelodyPageContent(page: page)
+                    .padding(.horizontal, 40)
+                    .padding(.top, 40)
+                    .padding(.bottom, 110)
             }
         }
         .ignoresSafeArea()
     }
+}
 
-    private var background: some View {
+/// Dark gradient behind every Staff Melody Page presentation: the Staff
+/// Melody Scene during a break, and the Melody Preview window in Settings.
+struct StaffMelodyEngravingBackground: View {
+    var body: some View {
         LinearGradient(
             colors: [
                 Color(red: 0.04, green: 0.05, blue: 0.08),
@@ -63,6 +75,24 @@ struct StaffMelodySceneView: View {
             startPoint: .top,
             endPoint: .bottom
         )
+    }
+}
+
+/// Renders a Staff Melody Page's empty / failed / ready state. Shared by the
+/// Staff Melody Scene and the Melody Preview window so both engrave
+/// identically — no light "print card", white ink on the dark background.
+struct StaffMelodyPageContent: View {
+    let page: StaffMelodyPage
+
+    var body: some View {
+        switch page {
+        case .empty:
+            emptyState
+        case .ready(let html):
+            VerovioScoreView(html: html)
+        case .failed(let message):
+            messageState(message)
+        }
     }
 
     private var emptyState: some View {

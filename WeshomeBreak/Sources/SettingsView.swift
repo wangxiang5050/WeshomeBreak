@@ -7,9 +7,14 @@ import UniformTypeIdentifiers
 /// import / manage / manual selection. Every control binds to a store that
 /// persists immediately — there's nothing to "save", edits apply as made.
 struct SettingsView: View {
+    /// Shared with `WeshomeBreakApp`'s Melody Preview `Window` scene id.
+    static let melodyPreviewWindowID = "melody-preview"
+
     @ObservedObject var settingsStore: BreakSettingsStore
     @ObservedObject var melodyLibraryStore: MelodyLibraryStore
     let availableSceneModes: [BreakSceneMode]
+
+    @Environment(\.openWindow) private var openWindow
 
     @State private var isImporting = false
     @State private var editingTitles: [UUID: String] = [:]
@@ -17,6 +22,7 @@ struct SettingsView: View {
 
     private static let durationRange: ClosedRange<Double> = 1...120
     private static let delayRange: ClosedRange<Double> = 1...60
+    private static let staffNotationScaleRange = BreakSettingsStore.staffNotationScaleRange
     private static let musicXMLTypes: [UTType] = [
         UTType(filenameExtension: "musicxml"),
         UTType(filenameExtension: "mxl")
@@ -63,6 +69,8 @@ struct SettingsView: View {
                     isImporting = true
                 }
 
+                staffNotationScaleRow
+
                 if let statusMessage = melodyLibraryStore.feedback.message {
                     Text(statusMessage)
                         .font(.callout)
@@ -91,6 +99,11 @@ struct SettingsView: View {
             allowsMultipleSelection: false
         ) { result in
             handleImport(result)
+        }
+        .background {
+            ResignTitleEditingOnOutsideClick(isEditing: focusedMelodyID != nil) {
+                focusedMelodyID = nil
+            }
         }
         .onChange(of: focusedMelodyID) { oldValue, newValue in
             guard let oldValue, oldValue != newValue else { return }
@@ -184,6 +197,35 @@ struct SettingsView: View {
         }
         melodyLibraryStore.rename(id: id, to: draft)
         editingTitles[id] = nil
+    }
+
+    /// Staff Notation Scale: applies to both the Staff Melody Scene (next
+    /// break onward) and the Melody Preview window (live).
+    private var staffNotationScaleRow: some View {
+        HStack {
+            Stepper(
+                value: $settingsStore.staffNotationScalePercent,
+                in: Self.staffNotationScaleRange,
+                step: 5
+            ) {
+                HStack {
+                    Text("谱面大小")
+                    Spacer()
+                    Text("\(settingsStore.staffNotationScalePercent)%")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Button("预览") {
+                openWindow(id: Self.melodyPreviewWindowID)
+            }
+            .disabled(melodyLibraryStore.selectedMelodyID == nil)
+            .help(
+                melodyLibraryStore.selectedMelodyID == nil
+                    ? "先选中一首旋律才能预览"
+                    : "在独立窗口预览当前旋律的谱面"
+            )
+        }
     }
 
     private func durationRow(title: String, minutes: Binding<Double>, range: ClosedRange<Double>) -> some View {

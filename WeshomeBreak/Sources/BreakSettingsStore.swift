@@ -3,9 +3,9 @@ import GrillBreakCore
 
 /// Persists every user-configurable setting from ticket 07's settings panel
 /// (work/rest durations, skip/delay permissions + delay length, scene mode
-/// selection strategy) to `UserDefaults`, and republishes them as
-/// `@Published` properties so the rest of the app updates live the moment a
-/// setting changes — no restart required.
+/// selection strategy, Staff Notation Scale) to `UserDefaults`, and
+/// republishes them as `@Published` properties so the rest of the app
+/// updates live the moment a setting changes — no restart required.
 ///
 /// Deliberately plain `UserDefaults` reads/writes (rather than
 /// `@AppStorage`) so that a plain `ObservableObject` class — not just a
@@ -25,7 +25,12 @@ final class BreakSettingsStore: ObservableObject {
         static let allowDelay = "settings.allowDelay"
         static let delayInterval = "settings.delayInterval"
         static let sceneModeSelection = "settings.sceneModeSelection"
+        static let staffNotationScalePercent = "settings.staffNotationScalePercent"
     }
+
+    /// Staff Notation Scale range offered in Settings: covers the
+    /// pre-setting hardcoded values (40 and 60) with room either side.
+    static let staffNotationScaleRange: ClosedRange<Int> = 40...100
 
     private enum Defaults {
         static let workDuration: TimeInterval = 20 * 60
@@ -33,6 +38,7 @@ final class BreakSettingsStore: ObservableObject {
         static let allowSkip = true
         static let allowDelay = true
         static let delayInterval: TimeInterval = 5 * 60
+        static let staffNotationScalePercent = 60
     }
 
     /// Invoked after `workDuration`/`breakDuration` changes.
@@ -77,6 +83,13 @@ final class BreakSettingsStore: ObservableObject {
         didSet { persist(sceneModeSelectionRaw, forKey: Keys.sceneModeSelection) }
     }
 
+    /// Staff Notation Scale: the Verovio engraving `scale` (percent) applied
+    /// to both the Staff Melody Scene (read at the start of each break) and
+    /// the Melody Preview window (read live).
+    @Published var staffNotationScalePercent: Int {
+        didSet { persist(staffNotationScalePercent, forKey: Keys.staffNotationScalePercent) }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -88,6 +101,8 @@ final class BreakSettingsStore: ObservableObject {
         allowDelay = (defaults.object(forKey: Keys.allowDelay) as? Bool) ?? Defaults.allowDelay
         delayInterval = Self.value(in: defaults, forKey: Keys.delayInterval, default: Defaults.delayInterval)
         sceneModeSelectionRaw = defaults.string(forKey: Keys.sceneModeSelection) ?? Self.randomSelectionValue
+        staffNotationScalePercent = (defaults.object(forKey: Keys.staffNotationScalePercent) as? Int)
+            ?? Defaults.staffNotationScalePercent
     }
 
     private static func value(in defaults: UserDefaults, forKey key: String, default fallback: TimeInterval) -> TimeInterval {

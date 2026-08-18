@@ -3,17 +3,14 @@ import Foundation
 /// Internal HTML builder for Staff Melody Page (transparent page + white ink).
 /// Callers use `StaffMelodyPage.prepare`; Verovio still runs in the app adapter.
 enum StaffMelodyEngravingPage {
-    /// 150% of the previous Staff Melody Verovio scale (40 → 60).
-    static let notationScalePercent = 60
-
-    static func html(musicXML: String) -> String {
+    static func html(musicXML: String, scalePercent: Int) -> String {
         let laidOut =
             (try? MusicXMLSystemBreakLayout.applying(
                 measuresPerSystem: MusicXMLSystemBreakLayout.measuresPerSystem,
                 to: musicXML
             )) ?? musicXML
         let payload = Data(laidOut.utf8).base64EncodedString()
-        let scale = notationScalePercent
+        let scale = scalePercent
         let pageWidth = MusicXMLSystemBreakLayout.pageWidth
         return """
         <!DOCTYPE html>

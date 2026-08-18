@@ -12,7 +12,7 @@ struct StaffMelodyPageTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let library = MelodyLibrary(rootDirectory: root)
-        let page = StaffMelodyPage.prepare(from: library)
+        let page = StaffMelodyPage.prepare(from: library, scalePercent: 60)
 
         #expect(page == .empty)
     }
@@ -22,7 +22,7 @@ struct StaffMelodyPageTests {
         let (library, root) = try makeLibrary(importing: MusicXMLFixtures.simpleFourMeasures)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let page = StaffMelodyPage.prepare(from: library)
+        let page = StaffMelodyPage.prepare(from: library, scalePercent: 60)
 
         guard case .ready(let html) = page else {
             Issue.record("expected ready page, got \(page)")
@@ -48,7 +48,7 @@ struct StaffMelodyPageTests {
         let scoreURL = root.appendingPathComponent("scores/\(melody.id.uuidString).musicxml")
         try FileManager.default.removeItem(at: scoreURL)
 
-        let page = StaffMelodyPage.prepare(from: library)
+        let page = StaffMelodyPage.prepare(from: library, scalePercent: 60)
 
         guard case .failed(let message) = page else {
             Issue.record("expected failed page, got \(page)")
@@ -79,13 +79,21 @@ struct StaffMelodyPageTests {
     }
 
     @Test
-    func readyUsesFourMeasuresPerSystemAt150PercentScale() throws {
-        let html = try readyHTML(from: MusicXMLFixtures.nineMeasures)
+    func readyUsesFourMeasuresPerSystemAtRequestedScale() throws {
+        let html = try readyHTML(from: MusicXMLFixtures.nineMeasures, scalePercent: 60)
 
         #expect(html.contains("scale: 60"))
         #expect(html.contains("breaks: \"encoded\""))
         #expect(html.contains("pageWidth: 1200"))
         #expect(!html.contains("scale: 40"))
+    }
+
+    @Test
+    func readyForwardsCustomScalePercentToVerovio() throws {
+        let html = try readyHTML(from: MusicXMLFixtures.nineMeasures, scalePercent: 85)
+
+        #expect(html.contains("scale: 85"))
+        #expect(!html.contains("scale: 60"))
     }
 
     @Test
@@ -113,11 +121,11 @@ struct StaffMelodyPageTests {
 
     // MARK: - Helpers
 
-    private func readyHTML(from musicXML: String) throws -> String {
+    private func readyHTML(from musicXML: String, scalePercent: Int = 60) throws -> String {
         let (library, root) = try makeLibrary(importing: musicXML)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let page = StaffMelodyPage.prepare(from: library)
+        let page = StaffMelodyPage.prepare(from: library, scalePercent: scalePercent)
         guard case .ready(let html) = page else {
             Issue.record("expected ready page, got \(page)")
             return ""
