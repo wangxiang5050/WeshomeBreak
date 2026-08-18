@@ -79,21 +79,33 @@ struct StaffMelodyPageTests {
     }
 
     @Test
-    func readyUsesFourMeasuresPerSystemAtRequestedScale() throws {
+    func readyUsesFourMeasuresPerSystemAtAFixedVerovioScale() throws {
         let html = try readyHTML(from: MusicXMLFixtures.nineMeasures, scalePercent: 60)
 
-        #expect(html.contains("scale: 60"))
+        // Verovio's own `scale` only changes the exported SVG's pixel
+        // dimensions, not glyph size relative to it, so it has no visible
+        // effect once `#notation svg` is stretched to fill its container —
+        // it stays fixed regardless of the requested Staff Notation Scale.
+        // (See `readySizesNotationContainerByRequestedScalePercent` below
+        // for what actually makes the score look bigger or smaller.)
+        #expect(html.contains("scale: 100"))
         #expect(html.contains("breaks: \"encoded\""))
         #expect(html.contains("pageWidth: 1200"))
-        #expect(!html.contains("scale: 40"))
     }
 
     @Test
-    func readyForwardsCustomScalePercentToVerovio() throws {
-        let html = try readyHTML(from: MusicXMLFixtures.nineMeasures, scalePercent: 85)
+    func readySizesNotationContainerByRequestedScalePercent() throws {
+        let atMax = try readyHTML(from: MusicXMLFixtures.nineMeasures, scalePercent: 100)
+        #expect(atMax.contains("width: 96.0%;"))
+        #expect(atMax.contains("max-height: 92.0%;"))
 
-        #expect(html.contains("scale: 85"))
-        #expect(!html.contains("scale: 60"))
+        let atDefault = try readyHTML(from: MusicXMLFixtures.nineMeasures, scalePercent: 60)
+        #expect(atDefault.contains("width: 57.6%;"))
+        #expect(atDefault.contains("max-height: 55.2%;"))
+
+        let atMin = try readyHTML(from: MusicXMLFixtures.nineMeasures, scalePercent: 40)
+        #expect(atMin.contains("width: 38.4%;"))
+        #expect(atMin.contains("max-height: 36.8%;"))
     }
 
     @Test

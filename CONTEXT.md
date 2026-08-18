@@ -73,8 +73,8 @@ Whether the Staff Melody Scene's content (engraved score, empty state, or failur
 _Avoid_: hide melody (ambiguous with deleting from the Melody Library), scene mode off, mute, overlay visibility state
 
 **Staff Notation Scale**:
-The Verovio engraving `scale` (percent) applied when turning a Melody Selection into a Staff Melody Page. Configured in Settings under Melody Library. A change takes effect for the Staff Melody Scene starting the next break; the Melody Preview window picks it up immediately.
-_Avoid_: zoom, notation size (implies a physical/point size, not the Verovio percent)
+How large the engraved score appears on screen (as a percent, 40–100) when turning a Melody Selection into a Staff Melody Page. Configured in Settings under Melody Library. Sizes the notation's on-screen footprint directly — Verovio's own `scale` option only changes the exported SVG's pixel dimensions, not glyph size relative to it, so it has no visible effect once the SVG is stretched to fill its container and is not what this setting drives. A change takes effect for the Staff Melody Scene starting the next break; the Melody Preview window picks it up immediately.
+_Avoid_: Verovio scale, zoom
 
 **Melody Preview**:
 An independent Settings window that engraves the current Melody Selection at the current Staff Notation Scale, so the user can judge the setting without waiting for a break. Tracks Melody Selection and Staff Notation Scale changes live; empty/failed states reuse the same copy as the Staff Melody Scene.

@@ -3,6 +3,15 @@ import Foundation
 /// Internal HTML builder for Staff Melody Page (transparent page + white ink).
 /// Callers use `StaffMelodyPage.prepare`; Verovio still runs in the app adapter.
 enum StaffMelodyEngravingPage {
+    /// The footprint at `scalePercent == 100`: Verovio's own `scale` option
+    /// only changes the exported SVG's pixel dimensions, not the size of
+    /// glyphs relative to that SVG — so once `#notation svg` is stretched to
+    /// fill its container (below), varying Verovio's `scale` has no visible
+    /// effect at all. The Staff Notation Scale setting therefore sizes
+    /// `#notation` itself, as a fraction of this baseline footprint.
+    private static let maxNotationWidthPercent = 96.0
+    private static let maxNotationMaxHeightPercent = 92.0
+
     static func html(musicXML: String, scalePercent: Int) -> String {
         let laidOut =
             (try? MusicXMLSystemBreakLayout.applying(
@@ -10,7 +19,9 @@ enum StaffMelodyEngravingPage {
                 to: musicXML
             )) ?? musicXML
         let payload = Data(laidOut.utf8).base64EncodedString()
-        let scale = scalePercent
+        let fraction = Double(scalePercent) / 100
+        let notationWidthPercent = Self.formatted(maxNotationWidthPercent * fraction)
+        let notationMaxHeightPercent = Self.formatted(maxNotationMaxHeightPercent * fraction)
         let pageWidth = MusicXMLSystemBreakLayout.pageWidth
         return """
         <!DOCTYPE html>
@@ -30,8 +41,8 @@ enum StaffMelodyEngravingPage {
               overflow: hidden;
             }
             #notation {
-              width: 96%;
-              max-height: 92%;
+              width: \(notationWidthPercent)%;
+              max-height: \(notationMaxHeightPercent)%;
               background: transparent;
             }
             #notation svg {
@@ -102,7 +113,7 @@ enum StaffMelodyEngravingPage {
                 try {
                   const tk = new verovio.toolkit();
                   tk.setOptions({
-                    scale: \(scale),
+                    scale: 100,
                     breaks: "encoded",
                     pageWidth: \(pageWidth),
                     adjustPageHeight: true,
@@ -134,5 +145,11 @@ enum StaffMelodyEngravingPage {
         </body>
         </html>
         """
+    }
+
+    /// One decimal place, e.g. `81.6` — steady formatting regardless of
+    /// floating-point rounding noise from the `fraction` multiplication.
+    private static func formatted(_ percent: Double) -> String {
+        String(format: "%.1f", percent)
     }
 }
