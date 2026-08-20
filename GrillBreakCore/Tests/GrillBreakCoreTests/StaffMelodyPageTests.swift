@@ -121,6 +121,17 @@ struct StaffMelodyPageTests {
     }
 
     @Test
+    func readyGrowsPageWidthToContentSoSpacingIsNotJustifiedAway() throws {
+        let html = try readyHTML(from: MusicXMLFixtures.simpleFourMeasures)
+
+        // Fixed pageWidth + justification compresses a 4-measure system so
+        // hard that Spacing Coefficient / Duration Proportion move notes by
+        // only a few percent of the page. Growing the page to the content
+        // leaves those options visible; CSS still fits the SVG to 谱面大小.
+        #expect(html.contains("adjustPageWidth: true"))
+    }
+
+    @Test
     func readySizesNotationContainerByRequestedScalePercent() throws {
         let atMax = try readyHTML(from: MusicXMLFixtures.nineMeasures, scalePercent: 100)
         #expect(atMax.contains("width: 96.0%;"))

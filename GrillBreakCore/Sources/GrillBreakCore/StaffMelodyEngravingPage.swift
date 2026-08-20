@@ -125,6 +125,7 @@ enum StaffMelodyEngravingPage {
                     pageWidth: \(pageWidth),
                     spacingLinear: \(spacingLinear),
                     spacingNonLinear: \(spacingNonLinear),
+                    adjustPageWidth: true,
                     adjustPageHeight: true,
                     footer: "none",
                     header: "none"

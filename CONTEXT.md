@@ -77,7 +77,7 @@ How large the engraved score appears on screen (as a percent, 40–100) when tur
 _Avoid_: Verovio scale, zoom
 
 **Spacing Coefficient**:
-The linear note-spacing factor (as a percent, 5–100; default 25) when turning a Melody Selection into a Staff Melody Page. Configured in Settings under Melody Library as 疏密系数. Maps to Verovio `spacingLinear` (value ÷ 100). With a fixed four-measures-per-system width, this redistributes space inside a system rather than making the staff overall wider or narrower. Same effect timing as Staff Notation Scale.
+The linear note-spacing factor (as a percent, 5–100; default 25) when turning a Melody Selection into a Staff Melody Page. Configured in Settings under Melody Library as 疏密系数. Maps to Verovio `spacingLinear` (value ÷ 100). With a fixed four-measures-per-system width, this redistributes space inside a system rather than making the staff overall wider or narrower. Verovio must grow the page to the system (`adjustPageWidth`) — justifying four dense measures into a fixed `pageWidth` compresses the difference away (same class of cancellation as Verovio `scale` vs CSS stretch). Same effect timing as Staff Notation Scale.
 _Avoid_: overall tightness, notehead size, Verovio scale
 
 **Duration Proportion**:
