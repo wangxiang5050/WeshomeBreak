@@ -15,7 +15,6 @@ struct StaffMelodyPageTests {
         let page = StaffMelodyPage.prepare(
             from: library,
             scalePercent: 60,
-            spacingCoefficientPercent: 25,
             durationProportionPercent: 60
         )
 
@@ -30,7 +29,6 @@ struct StaffMelodyPageTests {
         let page = StaffMelodyPage.prepare(
             from: library,
             scalePercent: 60,
-            spacingCoefficientPercent: 25,
             durationProportionPercent: 60
         )
 
@@ -61,7 +59,6 @@ struct StaffMelodyPageTests {
         let page = StaffMelodyPage.prepare(
             from: library,
             scalePercent: 60,
-            spacingCoefficientPercent: 25,
             durationProportionPercent: 60
         )
 
@@ -109,15 +106,14 @@ struct StaffMelodyPageTests {
     }
 
     @Test
-    func readyEmbedsRequestedSpacingFactors() throws {
+    func readyEmbedsRequestedDurationProportionAndOmitsSpacingLinear() throws {
         let html = try readyHTML(
             from: MusicXMLFixtures.simpleFourMeasures,
-            spacingCoefficientPercent: 40,
             durationProportionPercent: 80
         )
 
-        #expect(html.contains("spacingLinear: 0.40"))
         #expect(html.contains("spacingNonLinear: 0.80"))
+        #expect(!html.contains("spacingLinear"))
     }
 
     @Test
@@ -125,9 +121,9 @@ struct StaffMelodyPageTests {
         let html = try readyHTML(from: MusicXMLFixtures.simpleFourMeasures)
 
         // Fixed pageWidth + justification compresses a 4-measure system so
-        // hard that Spacing Coefficient / Duration Proportion move notes by
-        // only a few percent of the page. Growing the page to the content
-        // leaves those options visible; CSS still fits the SVG to 谱面大小.
+        // hard that Duration Proportion moves notes by only a few percent of
+        // the page. Growing the page to the content leaves that option
+        // visible; CSS still fits the SVG to 谱面大小.
         #expect(html.contains("adjustPageWidth: true"))
     }
 
@@ -174,7 +170,6 @@ struct StaffMelodyPageTests {
     private func readyHTML(
         from musicXML: String,
         scalePercent: Int = 60,
-        spacingCoefficientPercent: Int = 25,
         durationProportionPercent: Int = 60
     ) throws -> String {
         let (library, root) = try makeLibrary(importing: musicXML)
@@ -183,7 +178,6 @@ struct StaffMelodyPageTests {
         let page = StaffMelodyPage.prepare(
             from: library,
             scalePercent: scalePercent,
-            spacingCoefficientPercent: spacingCoefficientPercent,
             durationProportionPercent: durationProportionPercent
         )
         guard case .ready(let html) = page else {

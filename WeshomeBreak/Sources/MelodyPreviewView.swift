@@ -3,9 +3,8 @@ import SwiftUI
 
 /// Melody Preview window: engraves the current Melody Selection exactly as
 /// the Staff Melody Scene would, at the currently configured Staff Notation
-/// Scale, Spacing Coefficient, and Duration Proportion. Melody Selection
-/// and those settings can change live while this window stays open — there
-/// is no snapshot to refresh.
+/// Scale and Duration Proportion. Melody Selection and those settings can
+/// change live while this window stays open — there is no snapshot to refresh.
 struct MelodyPreviewView: View {
     let library: MelodyLibrary
     @ObservedObject var melodyLibraryStore: MelodyLibraryStore

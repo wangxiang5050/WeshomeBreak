@@ -23,7 +23,7 @@ struct SettingsView: View {
     private static let durationRange: ClosedRange<Double> = 1...120
     private static let delayRange: ClosedRange<Double> = 1...60
     private static let staffNotationScaleRange = BreakSettingsStore.staffNotationScaleRange
-    private static let noteSpacingPercentRange = BreakSettingsStore.noteSpacingPercentRange
+    private static let durationProportionPercentRange = BreakSettingsStore.durationProportionPercentRange
     private static let musicXMLTypes: [UTType] = [
         UTType(filenameExtension: "musicxml"),
         UTType(filenameExtension: "mxl")
@@ -71,16 +71,7 @@ struct SettingsView: View {
                 }
 
                 staffNotationScaleRow
-                noteSpacingRow(
-                    title: "疏密系数",
-                    percent: $settingsStore.spacingCoefficientPercent,
-                    help: "控制同一系统里的基础间距系数，需和「时值比例」一起看效果。"
-                )
-                noteSpacingRow(
-                    title: "时值比例",
-                    percent: $settingsStore.durationProportionPercent,
-                    help: "越接近 100% 越按时值拉开；越低则短时值音符挤得更紧。"
-                )
+                durationProportionRow
 
                 if let statusMessage = melodyLibraryStore.feedback.message {
                     Text(statusMessage)
@@ -239,18 +230,22 @@ struct SettingsView: View {
         }
     }
 
-    /// Spacing Coefficient / Duration Proportion: applies to both the Staff
-    /// Melody Scene (next break onward) and the Melody Preview window (live).
-    private func noteSpacingRow(title: String, percent: Binding<Int>, help: String) -> some View {
-        Stepper(value: percent, in: Self.noteSpacingPercentRange, step: 5) {
+    /// Duration Proportion: applies to both the Staff Melody Scene (next
+    /// break onward) and the Melody Preview window (live).
+    private var durationProportionRow: some View {
+        Stepper(
+            value: $settingsStore.durationProportionPercent,
+            in: Self.durationProportionPercentRange,
+            step: 5
+        ) {
             HStack {
-                Text(title)
+                Text("时值比例")
                 Spacer()
-                Text("\(percent.wrappedValue)%")
+                Text("\(settingsStore.durationProportionPercent)%")
                     .foregroundStyle(.secondary)
             }
         }
-        .help(help)
+        .help("越接近 100% 越按时值拉开；越低则短时值音符挤得更紧。")
     }
 
     private func durationRow(title: String, minutes: Binding<Double>, range: ClosedRange<Double>) -> some View {

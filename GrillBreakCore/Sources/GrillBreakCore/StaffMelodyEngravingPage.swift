@@ -15,7 +15,6 @@ enum StaffMelodyEngravingPage {
     static func html(
         musicXML: String,
         scalePercent: Int,
-        spacingCoefficientPercent: Int,
         durationProportionPercent: Int
     ) -> String {
         let laidOut =
@@ -28,7 +27,6 @@ enum StaffMelodyEngravingPage {
         let notationWidthPercent = Self.formatted(maxNotationWidthPercent * fraction)
         let notationMaxHeightPercent = Self.formatted(maxNotationMaxHeightPercent * fraction)
         let pageWidth = MusicXMLSystemBreakLayout.pageWidth
-        let spacingLinear = Self.spacingFactor(spacingCoefficientPercent)
         let spacingNonLinear = Self.spacingFactor(durationProportionPercent)
         return """
         <!DOCTYPE html>
@@ -123,7 +121,6 @@ enum StaffMelodyEngravingPage {
                     scale: 100,
                     breaks: "encoded",
                     pageWidth: \(pageWidth),
-                    spacingLinear: \(spacingLinear),
                     spacingNonLinear: \(spacingNonLinear),
                     adjustPageWidth: true,
                     adjustPageHeight: true,

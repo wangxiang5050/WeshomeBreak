@@ -13,12 +13,11 @@ public enum StaffMelodyPage: Equatable, Sendable {
     private static let readFailureMessage = "无法读取旋律，请在设置中重新导入。"
 
     /// Builds the Staff Melody Page for the library's current Melody
-    /// Selection, engraved at the given Staff Notation Scale and note-spacing
-    /// percents (Spacing Coefficient / Duration Proportion).
+    /// Selection, engraved at the given Staff Notation Scale and Duration
+    /// Proportion percents.
     public static func prepare(
         from library: MelodyLibrary,
         scalePercent: Int,
-        spacingCoefficientPercent: Int,
         durationProportionPercent: Int
     ) -> StaffMelodyPage {
         guard let melody = library.currentMelody() else {
@@ -34,7 +33,6 @@ public enum StaffMelodyPage: Equatable, Sendable {
                 html: StaffMelodyEngravingPage.html(
                     musicXML: musicXML,
                     scalePercent: scalePercent,
-                    spacingCoefficientPercent: spacingCoefficientPercent,
                     durationProportionPercent: durationProportionPercent
                 )
             )
