@@ -118,8 +118,19 @@ struct SettingsView: View {
         }
     }
 
+    /// Resting width of the title column (grouped Form label gutter).
+    private static let melodyTitleColumnWidth: CGFloat = 128
+
     private func melodyRow(_ melody: UserMelody) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        let isEditing = focusedMelodyID == melody.id
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            melodyTitleBlock(melody, isEditing: isEditing)
+                .frame(
+                    minWidth: isEditing ? 60 : Self.melodyTitleColumnWidth,
+                    maxWidth: isEditing ? .infinity : Self.melodyTitleColumnWidth,
+                    alignment: .leading
+                )
+
             Button {
                 melodyLibraryStore.select(id: melody.id)
             } label: {
@@ -130,18 +141,9 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .help("设为当前旋律")
 
-            VStack(alignment: .leading, spacing: 2) {
-                TextField("名称", text: titleBinding(for: melody))
-                    .textFieldStyle(.plain)
-                    .focused($focusedMelodyID, equals: melody.id)
-                    .onSubmit { commitTitle(id: melody.id) }
-                    .accessibilityLabel("旋律名称")
-                Text("\(melody.measureCount) 小节")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if !isEditing {
+                Spacer(minLength: 8)
             }
-
-            Spacer(minLength: 8)
 
             if melodyLibraryStore.selectedMelodyID == melody.id {
                 Text("当前")
@@ -156,6 +158,35 @@ struct SettingsView: View {
             }
             .buttonStyle(.borderless)
             .help("删除旋律")
+        }
+        .labelsHidden()
+    }
+
+    private func melodyTitleBlock(_ melody: UserMelody, isEditing: Bool) -> some View {
+        let displayedTitle = titleBinding(for: melody).wrappedValue
+        return VStack(alignment: .leading, spacing: 2) {
+            ZStack(alignment: .leading) {
+                TextField(text: titleBinding(for: melody), prompt: Text("名称")) {
+                    EmptyView()
+                }
+                .textFieldStyle(.plain)
+                .labelsHidden()
+                .focused($focusedMelodyID, equals: melody.id)
+                .onSubmit { commitTitle(id: melody.id) }
+                .accessibilityLabel("旋律名称")
+                .opacity(isEditing ? 1 : 0)
+
+                Text(displayedTitle)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .opacity(isEditing ? 0 : 1)
+                    .accessibilityHidden(true)
+                    .allowsHitTesting(false)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text("\(melody.measureCount) 小节")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
