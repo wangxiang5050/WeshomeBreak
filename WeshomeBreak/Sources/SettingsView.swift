@@ -118,19 +118,11 @@ struct SettingsView: View {
         }
     }
 
-    /// Resting width of the title column (grouped Form label gutter).
+    /// Caps the title so long names don't shove the trailing controls.
     private static let melodyTitleColumnWidth: CGFloat = 128
 
     private func melodyRow(_ melody: UserMelody) -> some View {
-        let isEditing = focusedMelodyID == melody.id
-        return HStack(alignment: .firstTextBaseline, spacing: 8) {
-            melodyTitleBlock(melody, isEditing: isEditing)
-                .frame(
-                    minWidth: isEditing ? 60 : Self.melodyTitleColumnWidth,
-                    maxWidth: isEditing ? .infinity : Self.melodyTitleColumnWidth,
-                    alignment: .leading
-                )
-
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Button {
                 melodyLibraryStore.select(id: melody.id)
             } label: {
@@ -141,9 +133,20 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .help("设为当前旋律")
 
-            if !isEditing {
-                Spacer(minLength: 8)
+            VStack(alignment: .leading, spacing: 2) {
+                TextField("", text: titleBinding(for: melody), prompt: Text("名称"))
+                    .textFieldStyle(.plain)
+                    .labelsHidden()
+                    .focused($focusedMelodyID, equals: melody.id)
+                    .onSubmit { commitTitle(id: melody.id) }
+                    .accessibilityLabel("旋律名称")
+                Text("\(melody.measureCount) 小节")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+            .frame(width: Self.melodyTitleColumnWidth, alignment: .leading)
+
+            Spacer(minLength: 8)
 
             if melodyLibraryStore.selectedMelodyID == melody.id {
                 Text("当前")
@@ -160,34 +163,6 @@ struct SettingsView: View {
             .help("删除旋律")
         }
         .labelsHidden()
-    }
-
-    private func melodyTitleBlock(_ melody: UserMelody, isEditing: Bool) -> some View {
-        let displayedTitle = titleBinding(for: melody).wrappedValue
-        return VStack(alignment: .leading, spacing: 2) {
-            ZStack(alignment: .leading) {
-                TextField(text: titleBinding(for: melody), prompt: Text("名称")) {
-                    EmptyView()
-                }
-                .textFieldStyle(.plain)
-                .labelsHidden()
-                .focused($focusedMelodyID, equals: melody.id)
-                .onSubmit { commitTitle(id: melody.id) }
-                .accessibilityLabel("旋律名称")
-                .opacity(isEditing ? 1 : 0)
-
-                Text(displayedTitle)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .opacity(isEditing ? 0 : 1)
-                    .accessibilityHidden(true)
-                    .allowsHitTesting(false)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Text("\(melody.measureCount) 小节")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
