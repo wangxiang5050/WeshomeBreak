@@ -25,9 +25,11 @@ App 会提示**原因**和**建议**。门禁拒绝（如多 Part）按提示改
 
 | 现象 | 怎么改 |
 |------|--------|
-| 无法解压 MXL | 用 MuseScore 打开该文件，**导出为 `.musicxml`** 再导入（优先于继续用 `.mxl`）。 |
+| 压缩包内文件名含非英文字符 | 在 Audiveris 把工程名改成英文后重新导出，或导出为 `.musicxml` 再导入。 |
+| 不是有效的 MXL 压缩包 | 文件损坏或根本不是 zip；用 MuseScore 或 Audiveris **重新导出** `.musicxml` / `.mxl`。 |
+| 其它解压失败 | 按提示导出 `.musicxml`；界面「详情」一行是解压工具原文，便于对照。 |
 | MXL 内没有谱面 | 压缩包不完整或非标准；在 MuseScore 中重新导出 `.musicxml` / `.mxl`。 |
-| 无法读取文件 | 确认文件未损坏、编码正常；改用 MuseScore 导出 `.musicxml`。 |
+| 无法读取文件 | 确认文件未损坏、编码正常；改用 MuseScore 导出 `.musicxml`。界面可能附带一行「详情」。 |
 | 不支持的扩展名 | 只接受 `.musicxml` / `.mxl`（及 `.xml`）；先从 MuseScore / Audiveris 导出正确格式。 |
 
 格式与镌刻决策见 `docs/adr/0001-musicxml-verovio-for-staff-melody.md`；术语见根目录 `CONTEXT.md`。

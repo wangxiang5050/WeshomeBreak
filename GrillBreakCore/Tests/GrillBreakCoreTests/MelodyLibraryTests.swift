@@ -363,6 +363,31 @@ struct MelodyLibraryTests {
         #expect(library.melodies().first { $0.id == second.id }?.title == "未命名旋律 2")
         #expect(MelodyLibraryError.duplicateTitle("小星星").errorDescription == "已有同名旋律「小星星」。")
     }
+
+    @Test("a save failure includes a short diagnostic detail")
+    func saveFailureIncludesDiagnostic() throws {
+        let (library, root) = try makeLibrary()
+        let scores = root.appendingPathComponent("scores", isDirectory: true)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scores.path)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path)
+            cleanup(root)
+        }
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: scores.path)
+
+        switch library.importMusicXML(MusicXMLFixtures.twoMeasures) {
+        case .imported:
+            Issue.record("expected rejection when the library cannot save")
+        case .rejected(let reason):
+            #expect(reason.contains("无法保存旋律文件。"))
+            #expect(reason.contains("磁盘空间"))
+            #expect(reason.contains("详情："))
+            #expect(!reason.contains("exit"))
+            let detail = reason.components(separatedBy: "详情：").last ?? ""
+            #expect(!detail.isEmpty)
+            #expect(detail.count <= 80)
+        }
+    }
 }
 
 @Suite("MusicXMLFileLoader")
@@ -459,9 +484,256 @@ struct MusicXMLFileLoaderTests {
         case .imported:
             Issue.record("expected rejection for corrupt mxl")
         case .rejected(let reason):
-            #expect(reason.contains("无法解压该 MXL 文件"))
-            #expect(reason.contains("导出为 .musicxml"))
+            #expect(reason.contains("该文件不是有效的 MXL 压缩包。"))
+            #expect(reason.contains("重新导出 .musicxml / .mxl"))
+            #expect(!reason.contains("详情"))
             #expect(!reason.contains("exit"))
         }
     }
+
+    @Test("rejects mxl whose inner score filename contains non-ASCII characters")
+    func rejectsMXLWithNonASCIIInnerName() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mxl-nonascii-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let innerName = "截屏2026-09-16 11.08.06.xml"
+        let mxlURL = dir.appendingPathComponent("tests.mxl")
+        try packedMXL(scoreName: innerName, xml: MusicXMLFixtures.twoMeasures).write(to: mxlURL)
+
+        let library = MelodyLibrary(rootDirectory: dir.appendingPathComponent("lib"))
+        switch library.importFile(at: mxlURL) {
+        case .imported:
+            Issue.record("expected rejection for non-ASCII inner name")
+        case .rejected(let reason):
+            #expect(reason.contains("压缩包内文件名为「\(innerName)」，含非英文字符，当前无法解压。"))
+            #expect(reason.contains("把工程名改成英文后重新导出"))
+            #expect(reason.contains(".musicxml"))
+            #expect(!reason.contains("详情"))
+        }
+    }
+
+    @Test("rejects mxl with multiple non-ASCII inner names using 等")
+    func rejectsMXLWithMultipleNonASCIIInnerNames() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mxl-nonascii-multi-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let mxlURL = dir.appendingPathComponent("tests.mxl")
+        try packedMXL(
+            scoreName: "甲.xml",
+            xml: MusicXMLFixtures.twoMeasures,
+            extraScoreNames: ["乙.xml"]
+        ).write(to: mxlURL)
+
+        let library = MelodyLibrary(rootDirectory: dir.appendingPathComponent("lib"))
+        switch library.importFile(at: mxlURL) {
+        case .imported:
+            Issue.record("expected rejection for multiple non-ASCII names")
+        case .rejected(let reason):
+            #expect(reason.contains("压缩包内文件名为「甲.xml」等，含非英文字符，当前无法解压。"))
+            #expect(!reason.contains("乙.xml"))
+        }
+    }
+
+    @Test("truncates a long non-ASCII inner filename in the rejection")
+    func truncatesLongNonASCIIInnerName() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mxl-nonascii-long-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let innerName = "截" + String(repeating: "a", count: 70) + ".xml"
+        let mxlURL = dir.appendingPathComponent("tests.mxl")
+        try packedMXL(scoreName: innerName, xml: MusicXMLFixtures.twoMeasures).write(to: mxlURL)
+
+        let library = MelodyLibrary(rootDirectory: dir.appendingPathComponent("lib"))
+        switch library.importFile(at: mxlURL) {
+        case .imported:
+            Issue.record("expected rejection for long non-ASCII name")
+        case .rejected(let reason):
+            let truncated = "截" + String(repeating: "a", count: 59) + "…"
+            #expect(reason.contains("压缩包内文件名为「\(truncated)」，含非英文字符，当前无法解压。"))
+            #expect(!reason.contains(".xml"))
+        }
+    }
+
+    @Test("unreadable musicxml includes a short diagnostic detail")
+    func unreadableMusicXMLIncludesDiagnostic() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mxl-unreadable-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let fileURL = dir.appendingPathComponent("broken.musicxml")
+        try Data([0xFF, 0xFE, 0x00, 0x01]).write(to: fileURL)
+
+        let library = MelodyLibrary(rootDirectory: dir.appendingPathComponent("lib"))
+        switch library.importFile(at: fileURL) {
+        case .imported:
+            Issue.record("expected rejection for unreadable musicxml")
+        case .rejected(let reason):
+            #expect(reason.contains("无法读取该文件。"))
+            #expect(reason.contains("导出 .musicxml"))
+            #expect(reason.contains("详情："))
+            #expect(!reason.contains("exit"))
+            let detail = reason.components(separatedBy: "详情：").last ?? ""
+            #expect(!detail.isEmpty)
+            #expect(detail.count <= 80)
+        }
+    }
+
+    @Test("unzip failure that is not a classified case includes a short diagnostic")
+    func unzipOtherFailureIncludesDiagnostic() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mxl-encrypted-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let scoreURL = dir.appendingPathComponent("score.musicxml")
+        try MusicXMLFixtures.twoMeasures.write(to: scoreURL, atomically: true, encoding: .utf8)
+        let containerDir = dir.appendingPathComponent("META-INF", isDirectory: true)
+        try FileManager.default.createDirectory(at: containerDir, withIntermediateDirectories: true)
+        try """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container>
+          <rootfiles>
+            <rootfile full-path="score.musicxml"/>
+          </rootfiles>
+        </container>
+        """.write(to: containerDir.appendingPathComponent("container.xml"), atomically: true, encoding: .utf8)
+
+        let mxlURL = dir.appendingPathComponent("locked.mxl")
+        let zip = Process()
+        zip.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        zip.arguments = ["-P", "secret", "-q", mxlURL.path, "score.musicxml", "META-INF/container.xml"]
+        zip.currentDirectoryURL = dir
+        try zip.run()
+        zip.waitUntilExit()
+        #expect(zip.terminationStatus == 0)
+
+        let library = MelodyLibrary(rootDirectory: dir.appendingPathComponent("lib"))
+        switch library.importFile(at: mxlURL) {
+        case .imported:
+            Issue.record("expected rejection for encrypted mxl")
+        case .rejected(let reason):
+            #expect(reason.contains("无法解压该 MXL 文件。"))
+            #expect(reason.contains("导出为 .musicxml"))
+            #expect(reason.contains("详情："))
+            #expect(!reason.contains("exit"))
+            let detail = reason.components(separatedBy: "详情：").last ?? ""
+            #expect(detail.lowercased().contains("password"))
+            #expect(detail.count <= 80)
+        }
+    }
+}
+
+private func packedMXL(scoreName: String, xml: String, extraScoreNames: [String] = []) throws -> Data {
+    let scoreData = Data(xml.utf8)
+    let container = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <container>
+          <rootfiles>
+            <rootfile full-path="\(scoreName)"/>
+          </rootfiles>
+        </container>
+        """
+    var entries: [(String, Data)] = [(scoreName, scoreData)]
+    for extra in extraScoreNames {
+        entries.append((extra, scoreData))
+    }
+    entries.append(("META-INF/container.xml", Data(container.utf8)))
+    return zipArchive(entries: entries)
+}
+
+private func zipArchive(entries: [(String, Data)]) -> Data {
+    var locals = Data()
+    var centrals = Data()
+    var offset: UInt32 = 0
+    for (name, fileData) in entries {
+        let nameData = Data(name.utf8)
+        let crc = zipCRC32(fileData)
+        let size = UInt32(fileData.count)
+        var local = Data()
+        zipAppendU32(&local, 0x04034b50)
+        zipAppendU16(&local, 20)
+        zipAppendU16(&local, 0x0800)
+        zipAppendU16(&local, 0)
+        zipAppendU16(&local, 0)
+        zipAppendU16(&local, 0)
+        zipAppendU32(&local, crc)
+        zipAppendU32(&local, size)
+        zipAppendU32(&local, size)
+        zipAppendU16(&local, UInt16(nameData.count))
+        zipAppendU16(&local, 0)
+        local.append(nameData)
+        local.append(fileData)
+        let localOffset = offset
+        locals.append(local)
+        offset += UInt32(local.count)
+
+        var central = Data()
+        zipAppendU32(&central, 0x02014b50)
+        zipAppendU16(&central, 20)
+        zipAppendU16(&central, 20)
+        zipAppendU16(&central, 0x0800)
+        zipAppendU16(&central, 0)
+        zipAppendU16(&central, 0)
+        zipAppendU16(&central, 0)
+        zipAppendU32(&central, crc)
+        zipAppendU32(&central, size)
+        zipAppendU32(&central, size)
+        zipAppendU16(&central, UInt16(nameData.count))
+        zipAppendU16(&central, 0)
+        zipAppendU16(&central, 0)
+        zipAppendU16(&central, 0)
+        zipAppendU16(&central, 0)
+        zipAppendU32(&central, 0)
+        zipAppendU32(&central, localOffset)
+        central.append(nameData)
+        centrals.append(central)
+    }
+    var eocd = Data()
+    zipAppendU32(&eocd, 0x06054b50)
+    zipAppendU16(&eocd, 0)
+    zipAppendU16(&eocd, 0)
+    zipAppendU16(&eocd, UInt16(entries.count))
+    zipAppendU16(&eocd, UInt16(entries.count))
+    zipAppendU32(&eocd, UInt32(centrals.count))
+    zipAppendU32(&eocd, UInt32(locals.count))
+    zipAppendU16(&eocd, 0)
+    var archive = Data()
+    archive.append(locals)
+    archive.append(centrals)
+    archive.append(eocd)
+    return archive
+}
+
+private func zipCRC32(_ data: Data) -> UInt32 {
+    var crc: UInt32 = 0xFFFFFFFF
+    for byte in data {
+        crc ^= UInt32(byte)
+        for _ in 0..<8 {
+            if crc & 1 != 0 {
+                crc = (crc >> 1) ^ 0xEDB88320
+            } else {
+                crc >>= 1
+            }
+        }
+    }
+    return crc ^ 0xFFFFFFFF
+}
+
+private func zipAppendU16(_ data: inout Data, _ value: UInt16) {
+    data.append(UInt8(value & 0xFF))
+    data.append(UInt8((value >> 8) & 0xFF))
+}
+
+private func zipAppendU32(_ data: inout Data, _ value: UInt32) {
+    data.append(UInt8(value & 0xFF))
+    data.append(UInt8((value >> 8) & 0xFF))
+    data.append(UInt8((value >> 16) & 0xFF))
+    data.append(UInt8((value >> 24) & 0xFF))
 }

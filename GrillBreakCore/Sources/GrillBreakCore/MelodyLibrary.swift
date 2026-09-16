@@ -127,7 +127,10 @@ public final class MelodyLibrary: @unchecked Sendable {
         } catch let error as MelodyLibraryError {
             return .rejected(reason: error.errorDescription ?? "")
         } catch {
-            return .rejected(reason: MusicXMLFileLoader.unreadableFileMessage)
+            return .rejected(reason: MusicXMLFileLoader.fallbackMessage(
+                MusicXMLFileLoader.unreadableFileMessage,
+                diagnostic: error.localizedDescription
+            ))
         }
     }
 
@@ -237,10 +240,13 @@ public final class MelodyLibrary: @unchecked Sendable {
             try saveManifest()
             return .imported(melody, warnings: draft.warnings)
         } catch {
-            return .rejected(reason: """
+            return .rejected(reason: MusicXMLFileLoader.fallbackMessage(
+                """
                 无法保存旋律文件。
                 请检查磁盘空间后重试。
-                """)
+                """,
+                diagnostic: error.localizedDescription
+            ))
         }
     }
 
