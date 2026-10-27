@@ -132,7 +132,7 @@ struct SettingsView: View {
     private var randomMelodyNote: String? {
         guard settingsStore.randomMelodyEnabled else { return nil }
         if settingsStore.sceneModeSelectionRaw == StaffMelodySceneSession.sceneModeIdentifier {
-            return "此开关生效时，下次休息不使用「当前」。"
+            return "此开关生效时，下次休息不按「当前」勾选，而从曲库随机抽取。"
         }
         return "仅当选择策略为「五线谱旋律」时，休息才会随机；现在仍用当前旋律。"
     }

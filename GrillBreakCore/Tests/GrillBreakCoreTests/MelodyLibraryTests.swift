@@ -145,13 +145,13 @@ struct MelodyLibraryTests {
 
         let resolved = MelodySelection.resolve(
             melodies: library.melodies(),
-            using: .manual(melodyID: melody.id)
+            melodyID: melody.id
         )
         #expect(resolved?.id == melody.id)
 
         let missing = MelodySelection.resolve(
             melodies: library.melodies(),
-            using: .manual(melodyID: UUID())
+            melodyID: UUID()
         )
         #expect(missing == nil)
     }

@@ -21,7 +21,7 @@ The break scene mode that shows a readable, musically correct staff notation of 
 _Avoid_: staff-notes decoration, random phrase, ambient notes (those describe the superseded decorative behavior)
 
 **Staff Melody Page**:
-The outcome of turning the Melody Library's current Melody Selection into what the Staff Melody Scene can show: empty, failed, or ready HTML for Score Rendering (Verovio).
+The outcome of engraving one User Melody: empty, failed, or ready HTML for Score Rendering (Verovio). On a Staff Melody Scene that melody is the one chosen for this rest. Melody Preview engraves the manual current melody instead.
 _Avoid_: StaffMelodyContent, resolver output, engraving prep (those were shallow pass-through names)
 
 **User Melody**:
@@ -81,7 +81,7 @@ How closely horizontal space follows note duration (as a percent, 5–100; defau
 _Avoid_: even note spacing, equal bar width, notehead size, Spacing Coefficient, 疏密系数
 
 **Melody Preview**:
-An independent Settings window that engraves the current Melody Selection at the current Staff Notation Scale and Duration Proportion, so the user can judge those settings without waiting for a break. Tracks Melody Selection and those settings live; empty/failed states reuse the same copy as the Staff Melody Scene.
+An independent Settings window that engraves the manual current melody at the current Staff Notation Scale and Duration Proportion, so the user can judge those settings without waiting for a break. Tracks that pin and those settings live, and does not follow a random rest draw. Empty/failed states reuse the same copy as the Staff Melody Scene.
 _Avoid_: score preview (ambiguous with a future multi-melody browser), thumbnail
 
 ## Distribution

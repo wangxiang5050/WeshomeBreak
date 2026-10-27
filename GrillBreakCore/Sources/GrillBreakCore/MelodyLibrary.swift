@@ -92,7 +92,7 @@ public final class MelodyLibrary: @unchecked Sendable {
         guard let selectedMelodyID else { return nil }
         return MelodySelection.resolve(
             melodies: manifest.melodies,
-            using: .manual(melodyID: selectedMelodyID)
+            melodyID: selectedMelodyID
         )
     }
 
@@ -286,26 +286,10 @@ public enum MelodySelection {
     /// `MelodySelectionState`, which also remembers the last shown melody.
     public static func resolve(
         melodies: [UserMelody],
-        using strategy: MelodySelectionStrategy
+        melodyID: UUID?
     ) -> UserMelody? {
-        switch strategy {
-        case .manual(let melodyID):
-            guard let melodyID else { return nil }
-            return melodies.first { $0.id == melodyID }
-        case .randomNoRepeat:
-            return nil
-        }
-    }
-}
-
-/// Melody fixed for the rest that is underway, including while a delay or a
-/// postpone-after-delay is waiting to show it again.
-public struct MelodyHeldRest: Equatable, Sendable {
-    /// `nil` when this rest has no melody: empty library, or no manual pick.
-    public var melodyID: UUID?
-
-    public init(melodyID: UUID?) {
-        self.melodyID = melodyID
+        guard let melodyID else { return nil }
+        return melodies.first { $0.id == melodyID }
     }
 }
 
@@ -317,7 +301,15 @@ public struct MelodyHeldRest: Equatable, Sendable {
 /// and is not restored after relaunch — callers persist only `lastShownMelodyID`.
 public final class MelodySelectionState: @unchecked Sendable {
     public private(set) var lastShownMelodyID: UUID?
-    public private(set) var heldRest: MelodyHeldRest?
+
+    /// Melody fixed for the rest underway, including while a delay or a
+    /// postpone-after-delay is waiting to show it again. `nil` means no rest
+    /// is held. `melodyID == nil` means this rest has no melody.
+    private var heldRest: HeldMelody?
+
+    private struct HeldMelody: Equatable {
+        var melodyID: UUID?
+    }
 
     private let randomIndex: (Int) -> Int
 
@@ -365,11 +357,11 @@ public final class MelodySelectionState: @unchecked Sendable {
         let melody: UserMelody?
         switch strategy {
         case .manual(let melodyID):
-            melody = MelodySelection.resolve(melodies: melodies, using: .manual(melodyID: melodyID))
+            melody = MelodySelection.resolve(melodies: melodies, melodyID: melodyID)
         case .randomNoRepeat:
             melody = randomMelody(from: melodies)
         }
-        heldRest = MelodyHeldRest(melodyID: melody?.id)
+        heldRest = HeldMelody(melodyID: melody?.id)
         if let melody {
             lastShownMelodyID = melody.id
         }

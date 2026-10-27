@@ -21,7 +21,6 @@ struct MelodySelectionTests {
 
         #expect(melody?.id == beta.id)
         #expect(state.lastShownMelodyID == beta.id)
-        #expect(state.heldRest == MelodyHeldRest(melodyID: beta.id))
     }
 
     @Test("the next random rest excludes the melody shown last time")
@@ -88,7 +87,6 @@ struct MelodySelectionTests {
 
         #expect(melody == nil)
         #expect(state.lastShownMelodyID == alpha.id)
-        #expect(state.heldRest == MelodyHeldRest(melodyID: nil))
     }
 
     @Test("a deleted last-shown melody is not excluded from the remaining library")
@@ -168,7 +166,13 @@ struct MelodySelectionTests {
 
         #expect(melody?.id == beta.id)
         #expect(state.lastShownMelodyID == beta.id)
-        #expect(state.heldRest == MelodyHeldRest(melodyID: beta.id))
+
+        let kept = state.beginPresentation(
+            melodies: [beta, gamma],
+            using: .manual(melodyID: gamma.id),
+            continuingSameRest: true
+        )
+        #expect(kept?.id == beta.id)
     }
 
     @Test("a continuing rest that had no melody stays empty")
