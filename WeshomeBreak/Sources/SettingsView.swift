@@ -70,6 +70,14 @@ struct SettingsView: View {
                     isImporting = true
                 }
 
+                Toggle("随机旋律", isOn: $settingsStore.randomMelodyEnabled)
+                if let randomMelodyNote {
+                    Text(randomMelodyNote)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 staffNotationScaleRow
                 durationProportionRow
 
@@ -116,6 +124,17 @@ struct SettingsView: View {
                 commitTitle(id: focusedMelodyID)
             }
         }
+    }
+
+    /// Shown only while 「随机旋律」 is on. The switch stays editable when
+    /// Scene Mode Selection is not fixed to Staff Melody; the note says the
+    /// rest still uses the manual current melody until it is.
+    private var randomMelodyNote: String? {
+        guard settingsStore.randomMelodyEnabled else { return nil }
+        if settingsStore.sceneModeSelectionRaw == StaffMelodySceneSession.sceneModeIdentifier {
+            return "此开关生效时，下次休息不使用「当前」。"
+        }
+        return "仅当选择策略为「五线谱旋律」时，休息才会随机；现在仍用当前旋律。"
     }
 
     /// Caps the title so long names don't shove the trailing controls.

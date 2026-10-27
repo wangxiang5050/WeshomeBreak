@@ -65,7 +65,7 @@ The set of imported User Melodies available to the Staff Melody Scene. Empty lib
 _Avoid_: playlist, catalog (unless UI copy)
 
 **Melody Selection**:
-Which User Melody from the Melody Library is shown on the next Staff Melody Scene. v1 is manual pick of one melody; later strategies (e.g. random) may extend this. Distinct from **Scene Mode Selection** (which Break Scene Mode to show).
+Which User Melody from the Melody Library is shown on a Staff Melody Scene. Manual pick stores one current melody. 「随机旋律」 draws one melody for each new rest when Scene Mode Selection is fixed to Staff Melody, excluding the melody shown on the previous Staff Melody rest, and does not replace the manual pick. A delay shows that same melody again. Distinct from **Scene Mode Selection** (which Break Scene Mode to show).
 _Avoid_: mode selection, scene selection (those refer to Break Scene Mode)
 
 **Staff Melody Visibility**:

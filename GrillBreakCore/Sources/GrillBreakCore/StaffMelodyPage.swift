@@ -14,18 +14,34 @@ public enum StaffMelodyPage: Equatable, Sendable {
 
     /// Builds the Staff Melody Page for the library's current Melody
     /// Selection, engraved at the given Staff Notation Scale and Duration
-    /// Proportion percents.
+    /// Proportion percents. Melody Preview uses this path.
     public static func prepare(
         from library: MelodyLibrary,
         scalePercent: Int,
         durationProportionPercent: Int
     ) -> StaffMelodyPage {
-        guard let melody = library.currentMelody() else {
+        prepare(
+            from: library,
+            melodyID: library.currentMelody()?.id,
+            scalePercent: scalePercent,
+            durationProportionPercent: durationProportionPercent
+        )
+    }
+
+    /// Builds the Staff Melody Page for one User Melody. `melodyID == nil`
+    /// is the empty state. A missing or unreadable score is the failure state.
+    public static func prepare(
+        from library: MelodyLibrary,
+        melodyID: UUID?,
+        scalePercent: Int,
+        durationProportionPercent: Int
+    ) -> StaffMelodyPage {
+        guard let melodyID else {
             return .empty
         }
 
         do {
-            let musicXML = try library.musicXML(for: melody.id)
+            let musicXML = try library.musicXML(for: melodyID)
             if musicXML.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return .failed(message: Self.readFailureMessage)
             }

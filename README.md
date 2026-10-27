@@ -55,7 +55,7 @@ swift test
 1. 启动后菜单栏出现图标：可打开设置、立即休息、暂停/继续、退出。
 2. 工作时长结束后，全屏遮罩覆盖所有屏幕；中央为 Staff Melody，角落为休息倒计时。
 3. 鼠标在遮罩上移动时浮现控制条：可跳过或延迟本次休息。
-4. 在设置中导入 MusicXML（`.musicxml` / `.mxl`）到 Melody Library，并手工选中当前旋律。
+4. 在设置中导入 MusicXML（`.musicxml` / `.mxl`）到 Melody Library，并手工选中当前旋律。选择策略为「五线谱旋律」时，可打开「随机旋律」，每次新休息从曲库抽一首。
 
 外置录入步骤详见 [`docs/melody-entry.md`](docs/melody-entry.md)。
 

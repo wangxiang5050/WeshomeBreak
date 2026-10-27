@@ -21,6 +21,13 @@ public final class BreakScheduler {
     /// resolves and the postponed rest actually starts. See `advance(to:)`.
     public private(set) var isRestPending: Bool = false
 
+    /// `true` after `delay(by:)` until that same rest ends or is replaced.
+    /// The next transition into `.resting` is the delayed rest coming back,
+    /// including when full-screen or Do Not Disturb held that return back.
+    /// `skip()`, `startBreakNow()`, and a rest ending on its own clear it.
+    /// Not restored across process relaunch — the scheduler always starts `false`.
+    public private(set) var continuesSameRest: Bool = false
+
     /// Overrides `strategy.duration(for:)` for the *current* phase only.
     /// Used by `delay(by:)` to make the working phase that stands in for a
     /// "snoozed rest" last exactly the delay interval, rather than a full
@@ -111,8 +118,12 @@ public final class BreakScheduler {
                 return
             }
             let overflow = now.timeIntervalSince(phaseStartedAt) - currentPhaseDuration
+            let endedRest = phase == .resting
             phase = phase.next
             phaseDurationOverride = nil
+            if endedRest {
+                continuesSameRest = false
+            }
             if isRestPending {
                 phaseStartedAt = now
                 isRestPending = false
@@ -150,6 +161,7 @@ public final class BreakScheduler {
         phase = .working
         phaseStartedAt = clock()
         phaseDurationOverride = nil
+        continuesSameRest = false
     }
 
     /// Ends the current rest immediately, but re-triggers the *same* rest
@@ -167,6 +179,7 @@ public final class BreakScheduler {
         phase = .working
         phaseStartedAt = clock()
         phaseDurationOverride = interval
+        continuesSameRest = true
     }
 
     /// Ends the current work period immediately and starts a fresh,
@@ -184,6 +197,7 @@ public final class BreakScheduler {
         phaseStartedAt = clock()
         isRestPending = false
         phaseDurationOverride = nil
+        continuesSameRest = false
     }
 
     /// Swaps in a new scheduling model, e.g. after the user changes work/rest

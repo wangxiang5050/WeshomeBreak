@@ -55,7 +55,7 @@ swift test
 1. After launch, use the menu-bar icon for Settings, Start break now, Pause/Resume, and Quit.
 2. When work time ends, a full-screen overlay covers all displays; Staff Melody is centered, with the break countdown in a corner.
 3. Move the mouse over the overlay to reveal controls: skip or snooze the current break.
-4. In Settings, import MusicXML (`.musicxml` / `.mxl`) into the Melody Library and manually select the active melody.
+4. In Settings, import MusicXML (`.musicxml` / `.mxl`) into the Melody Library and manually select the active melody. With the scene fixed to staff melody, 「随机旋律」 draws a different library melody for each new rest.
 
 External melody-entry steps: [`docs/melody-entry.md`](docs/melody-entry.md).
 

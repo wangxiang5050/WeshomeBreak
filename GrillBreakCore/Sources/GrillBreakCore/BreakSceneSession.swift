@@ -23,7 +23,15 @@ public class BreakSceneSession: ObservableObject {
 public final class StaffMelodySceneSession: BreakSceneSession {
     public static let sceneModeIdentifier = "staff-melody"
 
+    /// User Melody chosen for this presentation. `nil` is the empty state.
+    public let melodyID: UUID?
+
     @Published private var visibility = StaffMelodyVisibility()
+
+    public init(melodyID: UUID? = nil) {
+        self.melodyID = melodyID
+        super.init()
+    }
 
     public override var hoverBarExtraTitle: String? { visibility.toggleTitle }
     public override var showsContent: Bool { visibility.isContentVisible }

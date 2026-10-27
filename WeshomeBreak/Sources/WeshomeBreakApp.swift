@@ -15,10 +15,17 @@ struct WeshomeBreakApp: App {
         let settingsStore = BreakSettingsStore()
         let melodyLibrary = MelodyLibrary(rootDirectory: AppPaths.melodyLibraryRoot)
         let melodyLibraryStore = MelodyLibraryStore(library: melodyLibrary)
-        let sceneModes: [BreakSceneMode] = [
-            StaffMelodySceneMode(library: melodyLibrary, settingsStore: settingsStore)
-        ]
         let breakCycle = BreakCycle(settingsStore: settingsStore)
+        let sceneModes: [BreakSceneMode] = [
+            StaffMelodySceneMode(
+                library: melodyLibrary,
+                settingsStore: settingsStore,
+                breakCycle: breakCycle,
+                selectionState: MelodySelectionState(
+                    lastShownMelodyID: settingsStore.lastShownMelodyID
+                )
+            )
+        ]
 
         self.melodyLibrary = melodyLibrary
         _settingsStore = StateObject(wrappedValue: settingsStore)

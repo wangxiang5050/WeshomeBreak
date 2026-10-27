@@ -3,14 +3,13 @@ import GrillBreakCore
 import SwiftUI
 import WebKit
 
-/// Staff Melody Scene: shows the current User Melody engraved by Verovio
-/// (Staff Melody Page HTML → SVG inside WKWebView). Empty Melody Library →
-/// actionable empty state; countdown remains the overlay's responsibility.
+/// Staff Melody Scene: engraves the User Melody chosen for this rest
+/// (Staff Melody Page HTML → SVG inside WKWebView). An empty choice shows
+/// the actionable empty state; countdown remains the overlay's responsibility.
 extension StaffMelodyPage {
-    /// Prepares the page for the library's current Melody Selection at the
-    /// currently configured Staff Notation Scale and Duration Proportion.
-    /// Shared by the Staff Melody Scene and the Melody Preview window so
-    /// both read the settings the same way.
+    /// Melody Preview engraves the manual current melody at the current
+    /// Staff Notation Scale and Duration Proportion. The rest overlay does
+    /// not use this path: it engraves the melody chosen for that rest.
     @MainActor
     static func prepare(from library: MelodyLibrary, settingsStore: BreakSettingsStore) -> StaffMelodyPage {
         prepare(
@@ -27,9 +26,21 @@ struct StaffMelodySceneMode: BreakSceneMode {
 
     let library: MelodyLibrary
     let settingsStore: BreakSettingsStore
+    let breakCycle: BreakCycle
+    let selectionState: MelodySelectionState
 
     @MainActor
-    func makeSession() -> BreakSceneSession { StaffMelodySceneSession() }
+    func makeSession() -> BreakSceneSession {
+        let melody = selectionState.beginPresentation(
+            melodies: library.melodies(),
+            using: melodyStrategy(),
+            continuingSameRest: breakCycle.continuesSameRest
+        )
+        if settingsStore.lastShownMelodyID != selectionState.lastShownMelodyID {
+            settingsStore.lastShownMelodyID = selectionState.lastShownMelodyID
+        }
+        return StaffMelodySceneSession(melodyID: melody?.id)
+    }
 
     @MainActor
     func makeView() -> AnyView {
@@ -38,11 +49,30 @@ struct StaffMelodySceneMode: BreakSceneMode {
 
     @MainActor
     func makeView(session: BreakSceneSession) -> AnyView {
-        // `BreakOverlayView` calls this once, when its window is created —
-        // a Staff Notation Scale / Duration Proportion change made mid-break
-        // takes effect starting the next break, not this one.
-        let page = StaffMelodyPage.prepare(from: library, settingsStore: settingsStore)
+        // `BreakOverlayView` calls this once per screen, when its window is
+        // created. The melody was chosen once in `makeSession()`, so every
+        // screen engraves the same User Melody. Scale and Duration Proportion
+        // are read here, so a delay that presents again picks up the current
+        // values while keeping that melody.
+        let melodyID = (session as? StaffMelodySceneSession)?.melodyID
+        let page = StaffMelodyPage.prepare(
+            from: library,
+            melodyID: melodyID,
+            scalePercent: settingsStore.staffNotationScalePercent,
+            durationProportionPercent: settingsStore.durationProportionPercent
+        )
         return AnyView(StaffMelodySceneView(page: page, session: session))
+    }
+
+    /// Random only while Scene Mode Selection is fixed to this scene and the
+    /// user has turned 「随机旋律」 on. Otherwise the manual current melody.
+    @MainActor
+    private func melodyStrategy() -> MelodySelectionStrategy {
+        let fixedToStaffMelody = settingsStore.sceneModeSelectionRaw == identifier
+        if settingsStore.randomMelodyEnabled && fixedToStaffMelody {
+            return .randomNoRepeat
+        }
+        return .manual(melodyID: library.selectedMelodyID)
     }
 }
 

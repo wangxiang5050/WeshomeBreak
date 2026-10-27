@@ -28,6 +28,8 @@ final class BreakSettingsStore: ObservableObject {
         static let sceneModeSelection = "settings.sceneModeSelection"
         static let staffNotationScalePercent = "settings.staffNotationScalePercent"
         static let durationProportionPercent = "settings.durationProportionPercent"
+        static let randomMelodyEnabled = "settings.randomMelodyEnabled"
+        static let lastShownMelodyID = "settings.lastShownMelodyID"
     }
 
     /// Staff Notation Scale range offered in Settings: covers the
@@ -102,6 +104,24 @@ final class BreakSettingsStore: ObservableObject {
         didSet { persist(durationProportionPercent, forKey: Keys.durationProportionPercent) }
     }
 
+    /// When on, and Scene Mode Selection is fixed to Staff Melody, each new
+    /// rest draws a User Melody at random. Off keeps the manual current melody.
+    @Published var randomMelodyEnabled: Bool {
+        didSet { persist(randomMelodyEnabled, forKey: Keys.randomMelodyEnabled) }
+    }
+
+    /// Melody shown on the most recent Staff Melody rest that had one.
+    /// The in-progress rest's held choice is not stored here.
+    @Published var lastShownMelodyID: UUID? {
+        didSet {
+            if let lastShownMelodyID {
+                defaults.set(lastShownMelodyID.uuidString, forKey: Keys.lastShownMelodyID)
+            } else {
+                defaults.removeObject(forKey: Keys.lastShownMelodyID)
+            }
+        }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -117,6 +137,12 @@ final class BreakSettingsStore: ObservableObject {
             ?? Defaults.staffNotationScalePercent
         durationProportionPercent = (defaults.object(forKey: Keys.durationProportionPercent) as? Int)
             ?? Defaults.durationProportionPercent
+        randomMelodyEnabled = (defaults.object(forKey: Keys.randomMelodyEnabled) as? Bool) ?? false
+        if let raw = defaults.string(forKey: Keys.lastShownMelodyID) {
+            lastShownMelodyID = UUID(uuidString: raw)
+        } else {
+            lastShownMelodyID = nil
+        }
     }
 
     private static func value(in defaults: UserDefaults, forKey key: String, default fallback: TimeInterval) -> TimeInterval {

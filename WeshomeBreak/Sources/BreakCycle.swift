@@ -115,6 +115,10 @@ final class BreakCycle: ObservableObject {
         remaining.update(scheduler.remaining)
     }
 
+    /// Whether the next rest presentation continues the rest already chosen
+    /// (a delay coming back, including after a full-screen or Do Not Disturb hold).
+    var continuesSameRest: Bool { scheduler.continuesSameRest }
+
     var formattedRemaining: String {
         remaining.formatted
     }

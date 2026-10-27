@@ -22,6 +22,45 @@ struct StaffMelodyPageTests {
     }
 
     @Test
+    func readyForAMelodyThatIsNotTheManualSelection() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("staff-melody-page-other-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let library = MelodyLibrary(rootDirectory: root)
+        guard case .imported(let current, _) = library.importMusicXML(MusicXMLFixtures.simpleFourMeasures) else {
+            Issue.record("expected the current melody to import")
+            return
+        }
+        guard case .imported(let other, _) = library.importMusicXML(MusicXMLFixtures.twoMeasures) else {
+            Issue.record("expected the other melody to import")
+            return
+        }
+        #expect(library.currentMelody()?.id == current.id)
+
+        let page = StaffMelodyPage.prepare(
+            from: library,
+            melodyID: other.id,
+            scalePercent: 60,
+            durationProportionPercent: 60
+        )
+        guard case .ready(let html) = page else {
+            Issue.record("expected ready page, got \(page)")
+            return
+        }
+        let otherLaidOut = try MusicXMLSystemBreakLayout.applying(
+            measuresPerSystem: MusicXMLSystemBreakLayout.measuresPerSystem,
+            to: MusicXMLFixtures.twoMeasures
+        )
+        let currentLaidOut = try MusicXMLSystemBreakLayout.applying(
+            measuresPerSystem: MusicXMLSystemBreakLayout.measuresPerSystem,
+            to: MusicXMLFixtures.simpleFourMeasures
+        )
+        #expect(html.contains(Data(otherLaidOut.utf8).base64EncodedString()))
+        #expect(!html.contains(Data(currentLaidOut.utf8).base64EncodedString()))
+    }
+
+    @Test
     func readyWhenCurrentMelodyExists() throws {
         let (library, root) = try makeLibrary(importing: MusicXMLFixtures.simpleFourMeasures)
         defer { try? FileManager.default.removeItem(at: root) }

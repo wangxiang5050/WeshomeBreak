@@ -354,4 +354,86 @@ struct BreakSchedulerTests {
         scheduler.updateStrategy(SimpleCycleSchedule(workDuration: 99 * 60, breakDuration: 5 * 60))
         #expect(scheduler.remaining == 3 * 60)
     }
+
+    @Test("a fresh scheduler is not continuing a rest")
+    func startsWithoutContinuingARest() {
+        let (scheduler, _) = makeScheduler()
+        #expect(!scheduler.continuesSameRest)
+    }
+
+    @Test("delay marks the following rest as the same rest, including after it returns")
+    func delayContinuesTheSameRestUntilItReturns() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        #expect(!scheduler.continuesSameRest)
+
+        scheduler.delay(by: 5 * 60)
+        #expect(scheduler.continuesSameRest)
+        #expect(scheduler.phase == .working)
+
+        clock.advance(by: 5 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+        #expect(scheduler.continuesSameRest)
+    }
+
+    @Test("a delay while working does not mark the next rest as a continuation")
+    func delayWhileWorkingDoesNotContinueARest() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60)
+
+        clock.advance(by: 5 * 60)
+        scheduler.delay(by: 5 * 60)
+
+        #expect(!scheduler.continuesSameRest)
+    }
+
+    @Test("skip ends the rest, so the next rest is not a continuation")
+    func skipClearsSameRestContinuation() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        scheduler.delay(by: 5 * 60)
+        clock.advance(by: 5 * 60)
+        scheduler.tick()
+        #expect(scheduler.continuesSameRest)
+
+        scheduler.skip()
+        #expect(scheduler.phase == .working)
+        #expect(!scheduler.continuesSameRest)
+    }
+
+    @Test("a rest that ends on its own is not continued into the next one")
+    func naturalRestEndClearsSameRestContinuation() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        scheduler.delay(by: 5 * 60)
+        clock.advance(by: 5 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+        #expect(scheduler.continuesSameRest)
+
+        clock.advance(by: 5 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .working)
+        #expect(!scheduler.continuesSameRest)
+    }
+
+    @Test("starting a break during a delay replaces that rest")
+    func startBreakNowDuringDelayDoesNotContinueTheDelayedRest() {
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        scheduler.delay(by: 5 * 60)
+        #expect(scheduler.continuesSameRest)
+
+        scheduler.startBreakNow()
+        #expect(scheduler.phase == .resting)
+        #expect(!scheduler.continuesSameRest)
+    }
 }

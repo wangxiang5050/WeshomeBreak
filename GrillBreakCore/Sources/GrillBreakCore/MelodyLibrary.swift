@@ -271,20 +271,115 @@ public final class MelodyLibrary: @unchecked Sendable {
     }
 }
 
-/// Melody Selection strategies. v1 is manual pick; later strategies (e.g. random)
-/// can be added without changing library storage.
+/// Melody Selection strategies. Manual pick keeps the library's current melody.
+/// Random draws a User Melody for one rest and does not write that choice back
+/// onto the manual selection.
 public enum MelodySelectionStrategy: Sendable, Equatable {
-    case manual(melodyID: UUID)
+    case manual(melodyID: UUID?)
+    /// Equal chance among the library, excluding the melody shown on the
+    /// previous Staff Melody rest when that still leaves at least one melody.
+    case randomNoRepeat
 }
 
 public enum MelodySelection {
+    /// Resolves a manual Melody Selection. Random draws go through
+    /// `MelodySelectionState`, which also remembers the last shown melody.
     public static func resolve(
         melodies: [UserMelody],
         using strategy: MelodySelectionStrategy
     ) -> UserMelody? {
         switch strategy {
         case .manual(let melodyID):
+            guard let melodyID else { return nil }
             return melodies.first { $0.id == melodyID }
+        case .randomNoRepeat:
+            return nil
         }
+    }
+}
+
+/// Melody fixed for the rest that is underway, including while a delay or a
+/// postpone-after-delay is waiting to show it again.
+public struct MelodyHeldRest: Equatable, Sendable {
+    /// `nil` when this rest has no melody: empty library, or no manual pick.
+    public var melodyID: UUID?
+
+    public init(melodyID: UUID?) {
+        self.melodyID = melodyID
+    }
+}
+
+/// In-process Melody Selection for Staff Melody rests.
+///
+/// `lastShownMelodyID` is the melody actually chosen for the most recent
+/// Staff Melody rest that had one. An empty rest does not clear it. The held
+/// rest survives dismissing the overlay for a delay; it is not process state
+/// and is not restored after relaunch — callers persist only `lastShownMelodyID`.
+public final class MelodySelectionState: @unchecked Sendable {
+    public private(set) var lastShownMelodyID: UUID?
+    public private(set) var heldRest: MelodyHeldRest?
+
+    private let randomIndex: (Int) -> Int
+
+    /// - Parameter randomIndex: Given a pool size, returns the index to pick.
+    ///   Must be in `0..<poolSize`. Tests pass a fixed index; production uses
+    ///   `Int.random(in:)`.
+    public init(
+        lastShownMelodyID: UUID? = nil,
+        randomIndex: @escaping (Int) -> Int = { Int.random(in: 0..<$0) }
+    ) {
+        self.lastShownMelodyID = lastShownMelodyID
+        self.randomIndex = randomIndex
+    }
+
+    /// Chooses the User Melody for a Staff Melody rest that is about to appear.
+    ///
+    /// A continuing rest keeps `heldRest` when that melody is still in the
+    /// library, including an explicit empty choice. If the held melody was
+    /// removed, draws again with random-no-repeat against the current library.
+    /// A new rest draws with `strategy` and replaces the hold. A draw that
+    /// finds no melody leaves `lastShownMelodyID` unchanged.
+    @discardableResult
+    public func beginPresentation(
+        melodies: [UserMelody],
+        using strategy: MelodySelectionStrategy,
+        continuingSameRest: Bool
+    ) -> UserMelody? {
+        if continuingSameRest, let heldRest {
+            if let melodyID = heldRest.melodyID,
+               let melody = melodies.first(where: { $0.id == melodyID }) {
+                return melody
+            }
+            if heldRest.melodyID == nil {
+                return nil
+            }
+            return draw(melodies: melodies, using: .randomNoRepeat)
+        }
+        return draw(melodies: melodies, using: strategy)
+    }
+
+    private func draw(
+        melodies: [UserMelody],
+        using strategy: MelodySelectionStrategy
+    ) -> UserMelody? {
+        let melody: UserMelody?
+        switch strategy {
+        case .manual(let melodyID):
+            melody = MelodySelection.resolve(melodies: melodies, using: .manual(melodyID: melodyID))
+        case .randomNoRepeat:
+            melody = randomMelody(from: melodies)
+        }
+        heldRest = MelodyHeldRest(melodyID: melody?.id)
+        if let melody {
+            lastShownMelodyID = melody.id
+        }
+        return melody
+    }
+
+    private func randomMelody(from melodies: [UserMelody]) -> UserMelody? {
+        guard !melodies.isEmpty else { return nil }
+        let excludingLast = melodies.filter { $0.id != lastShownMelodyID }
+        let pool = excludingLast.isEmpty ? melodies : excludingLast
+        return pool[randomIndex(pool.count)]
     }
 }

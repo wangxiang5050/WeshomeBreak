@@ -157,4 +157,46 @@ struct BreakInterruptionSourceTests {
         #expect(scheduler.phase == .resting)
         #expect(!scheduler.isRestPending)
     }
+
+    @Test("a delayed rest that is postponed still continues that same rest when it starts")
+    func postponedDelayReturnContinuesTheSameRest() {
+        let source = StubInterruptionSource()
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60, source: source)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        scheduler.delay(by: 5 * 60)
+        #expect(scheduler.continuesSameRest)
+
+        source.isFullScreen = true
+        clock.advance(by: 5 * 60)
+        scheduler.tick()
+        #expect(scheduler.phase == .working)
+        #expect(scheduler.isRestPending)
+        #expect(scheduler.continuesSameRest)
+
+        source.isFullScreen = false
+        scheduler.tick()
+        #expect(scheduler.phase == .resting)
+        #expect(scheduler.continuesSameRest)
+    }
+
+    @Test("starting a break while a delayed rest is postponed replaces that rest")
+    func startBreakNowDuringPostponedDelayDoesNotContinue() {
+        let source = StubInterruptionSource()
+        let (scheduler, clock) = makeScheduler(workDuration: 20 * 60, breakDuration: 5 * 60, source: source)
+
+        clock.advance(by: 20 * 60)
+        scheduler.tick()
+        scheduler.delay(by: 5 * 60)
+        source.isFullScreen = true
+        clock.advance(by: 5 * 60)
+        scheduler.tick()
+        #expect(scheduler.isRestPending)
+
+        scheduler.startBreakNow()
+        #expect(scheduler.phase == .resting)
+        #expect(!scheduler.isRestPending)
+        #expect(!scheduler.continuesSameRest)
+    }
 }
