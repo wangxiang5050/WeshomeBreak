@@ -6,3 +6,5 @@ DerivedData/
 xcuserdata/
 .derivedData/
 dist/
+.agents/
+.cursor/
