@@ -120,8 +120,56 @@ struct MusicXMLSystemBreakLayoutTests {
         #expect(measures.enumerated().filter { measureHasNewSystem($0.element) }.map(\.offset) == [4])
     }
 
+    @Test
+    func stripsEncodedPageBreaksSoLaterMeasuresStayWithTheScore() throws {
+        // MuseScore put a new-page before the 7th bar of a 9-bar excerpt.
+        // Engraving only draws page 1, so those last bars never appeared.
+        let withPageBreak = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <score-partwise version="4.0">
+          <part-list>
+            <score-part id="P1"><part-name>Melody</part-name></score-part>
+          </part-list>
+          <part id="P1">
+            <measure number="1"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+            <measure number="2"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+            <measure number="3"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+            <measure number="4"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+            <measure number="5"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+            <measure number="6"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+            <measure number="6">
+              <print new-page="yes" page-number="2">
+                <system-layout>
+                  <top-system-distance>70</top-system-distance>
+                </system-layout>
+              </print>
+              <note><rest/><duration>4</duration><type>whole</type></note>
+            </measure>
+            <measure number="7"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+            <measure number="8"><note><rest/><duration>4</duration><type>whole</type></note></measure>
+          </part>
+        </score-partwise>
+        """
+
+        let laidOut = try MusicXMLSystemBreakLayout.applying(
+            measuresPerSystem: 4,
+            to: withPageBreak
+        )
+        let document = try XMLDocument(xmlString: laidOut, options: [.nodeLoadExternalEntitiesNever])
+        let measures = try document.nodes(forXPath: "//part/measure") as! [XMLElement]
+
+        #expect(measures.count == 9)
+        #expect(measures.allSatisfy { !measureHasNewPage($0) })
+        #expect(measures.enumerated().filter { measureHasNewSystem($0.element) }.map(\.offset) == [4, 8])
+    }
+
     private func measureHasNewSystem(_ measure: XMLElement) -> Bool {
         let prints = (try? measure.nodes(forXPath: "./print") as? [XMLElement]) ?? []
         return prints.contains { $0.attribute(forName: "new-system")?.stringValue == "yes" }
+    }
+
+    private func measureHasNewPage(_ measure: XMLElement) -> Bool {
+        let prints = (try? measure.nodes(forXPath: "./print") as? [XMLElement]) ?? []
+        return prints.contains { $0.attribute(forName: "new-page")?.stringValue == "yes" }
     }
 }

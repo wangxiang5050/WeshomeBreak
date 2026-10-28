@@ -3,8 +3,10 @@ import Foundation
 /// Inserts MusicXML `print new-system` markers so Verovio can engrave a fixed
 /// number of measures per system when `breaks` is `"encoded"`.
 ///
-/// Also strips imported page-layout / measure widths that make Verovio's
-/// auto-breaks pack the wrong number of bars per system (e.g. Audiveris 5+3).
+/// Also strips imported page-layout, measure widths, and encoded page breaks.
+/// Page breaks would send later bars to page 2, which engraving never draws
+/// (`renderToSVG` page 1 only). Widths make Verovio's auto-breaks pack the
+/// wrong number of bars per system (e.g. Audiveris 5+3).
 public enum MusicXMLSystemBreakLayout {
     public static let measuresPerSystem = 4
 
@@ -32,7 +34,7 @@ public enum MusicXMLSystemBreakLayout {
         for measures in measureGroups {
             for (index, measure) in measures.enumerated() {
                 measure.removeAttribute(forName: "width")
-                stripNewSystemPrints(from: measure)
+                stripEncodedBreaks(from: measure)
                 if index > 0 && index % measuresPerSystem == 0 {
                     let printElement = XMLElement(name: "print")
                     printElement.setAttributesWith(["new-system": "yes"])
@@ -55,12 +57,16 @@ public enum MusicXMLSystemBreakLayout {
         }
     }
 
-    private static func stripNewSystemPrints(from measure: XMLElement) {
+    /// Drop imported system and page breaks. A leftover `new-page` keeps the
+    /// bars after it off the single engraved page.
+    private static func stripEncodedBreaks(from measure: XMLElement) {
         for printElement in measure.elements(forName: "print") {
-            guard printElement.attribute(forName: "new-system")?.stringValue == "yes" else {
-                continue
-            }
+            let hadSystem = printElement.attribute(forName: "new-system")?.stringValue == "yes"
+            let hadPage = printElement.attribute(forName: "new-page")?.stringValue == "yes"
+            guard hadSystem || hadPage else { continue }
             printElement.removeAttribute(forName: "new-system")
+            printElement.removeAttribute(forName: "new-page")
+            printElement.removeAttribute(forName: "page-number")
             let attrs = printElement.attributes ?? []
             let children = printElement.children ?? []
             if attrs.isEmpty && children.isEmpty {
