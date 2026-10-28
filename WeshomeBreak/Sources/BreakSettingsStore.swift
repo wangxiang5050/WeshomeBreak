@@ -3,8 +3,8 @@ import GrillBreakCore
 
 /// Persists every user-configurable setting from ticket 07's settings panel
 /// (work/rest durations, skip/delay permissions + delay length, scene mode
-/// selection strategy, Staff Notation Scale, Duration Proportion) to
-/// `UserDefaults`, and
+/// selection strategy, Staff Notation Scale, Duration Proportion) plus
+/// launch-at-login to `UserDefaults`, and
 /// republishes them as `@Published` properties so the rest of the app
 /// updates live the moment a setting changes — no restart required.
 ///
@@ -30,6 +30,7 @@ final class BreakSettingsStore: ObservableObject {
         static let durationProportionPercent = "settings.durationProportionPercent"
         static let randomMelodyEnabled = "settings.randomMelodyEnabled"
         static let lastShownMelodyID = "settings.lastShownMelodyID"
+        static let launchAtLogin = "settings.launchAtLogin"
     }
 
     /// Staff Notation Scale range offered in Settings: covers the
@@ -122,6 +123,12 @@ final class BreakSettingsStore: ObservableObject {
         }
     }
 
+    /// Login-item preference. Default on. `WeshomeBreakApp` applies this to
+    /// `SMAppService` at launch and whenever the settings toggle changes.
+    @Published var launchAtLogin: Bool {
+        didSet { persist(launchAtLogin, forKey: Keys.launchAtLogin) }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -138,6 +145,9 @@ final class BreakSettingsStore: ObservableObject {
         durationProportionPercent = (defaults.object(forKey: Keys.durationProportionPercent) as? Int)
             ?? Defaults.durationProportionPercent
         randomMelodyEnabled = (defaults.object(forKey: Keys.randomMelodyEnabled) as? Bool) ?? false
+        // Missing key means the user has never chosen — spec default is on.
+        // `bool(forKey:)` would treat that absence as false.
+        launchAtLogin = (defaults.object(forKey: Keys.launchAtLogin) as? Bool) ?? true
         if let raw = defaults.string(forKey: Keys.lastShownMelodyID) {
             lastShownMelodyID = UUID(uuidString: raw)
         } else {

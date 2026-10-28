@@ -9,6 +9,7 @@ struct WeshomeBreakApp: App {
     private let melodyLibrary: MelodyLibrary
     private let restOverlay: RestOverlay
     private let menuStatusTitleUpdater: MenuBarLiveStatusTitleUpdater
+    private let loginLaunch: LoginLaunchController
     private let availableSceneModes: [BreakSceneMode]
 
     init() {
@@ -27,7 +28,10 @@ struct WeshomeBreakApp: App {
             )
         ]
 
+        let loginLaunch = LoginLaunchController()
+
         self.melodyLibrary = melodyLibrary
+        self.loginLaunch = loginLaunch
         _settingsStore = StateObject(wrappedValue: settingsStore)
         _melodyLibraryStore = StateObject(wrappedValue: melodyLibraryStore)
         _breakCycle = StateObject(wrappedValue: breakCycle)
@@ -43,6 +47,7 @@ struct WeshomeBreakApp: App {
         restOverlay.start(observing: breakCycle)
         menuStatusTitleUpdater = MenuBarLiveStatusTitleUpdater(breakCycle: breakCycle)
         menuStatusTitleUpdater.start()
+        loginLaunch.apply(enabled: settingsStore.launchAtLogin)
     }
 
     var body: some Scene {
@@ -55,6 +60,7 @@ struct WeshomeBreakApp: App {
             SettingsView(
                 settingsStore: settingsStore,
                 melodyLibraryStore: melodyLibraryStore,
+                loginLaunch: loginLaunch,
                 availableSceneModes: availableSceneModes
             )
         }

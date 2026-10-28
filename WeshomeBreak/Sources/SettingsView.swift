@@ -12,6 +12,7 @@ struct SettingsView: View {
 
     @ObservedObject var settingsStore: BreakSettingsStore
     @ObservedObject var melodyLibraryStore: MelodyLibraryStore
+    @ObservedObject var loginLaunch: LoginLaunchController
     let availableSceneModes: [BreakSceneMode]
 
     @Environment(\.openWindow) private var openWindow
@@ -31,6 +32,30 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("启动") {
+                Toggle("登录时启动", isOn: $settingsStore.launchAtLogin)
+                    .onChange(of: settingsStore.launchAtLogin) { _, enabled in
+                        loginLaunch.apply(enabled: enabled)
+                    }
+                    .help("登录本机后自动打开 Weshome Break")
+                if loginLaunch.needsApproval {
+                    Text("macOS 需要你在「系统设置 → 通用 → 登录项」中允许 Weshome Break。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("打开登录项设置") {
+                        loginLaunch.openSystemSettings()
+                    }
+                }
+                if let failureMessage = loginLaunch.failureMessage {
+                    Text(failureMessage)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             Section("时长") {
                 durationRow(
                     title: "工作时长",
