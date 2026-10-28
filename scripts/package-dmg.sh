@@ -1,17 +1,33 @@
 #!/usr/bin/env bash
 # Build a Release .app and wrap it in a UDZO DMG for Unnotarized Acquaintance Distribution.
+# The Release build lives only in a temporary directory and is deleted when this
+# script exits, so Spotlight does not keep a second "Release" copy beside the
+# Debug app Xcode runs. The DMG in dist/ is the only leftover.
 # Usage: scripts/package-dmg.sh [--universal] [--allow-unsigned]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP_DIR="$ROOT/WeshomeBreak"
 DIST_DIR="$ROOT/dist"
-DERIVED="$DIST_DIR/DerivedData"
 STAGE="$DIST_DIR/dmg-stage"
+# Assigned after option parsing; removed by the EXIT trap.
+DERIVED=""
+CODESIGN_OUT=""
 SCHEME="WeshomeBreak"
 CONFIG="Release"
 PRODUCT_APP_NAME="Weshome Break.app"
 VOL_NAME="Weshome Break"
+
+cleanup() {
+  if [[ -n "$CODESIGN_OUT" ]]; then
+    rm -f "$CODESIGN_OUT"
+  fi
+  rm -rf "$STAGE"
+  if [[ -n "$DERIVED" ]]; then
+    rm -rf "$DERIVED"
+  fi
+}
+trap cleanup EXIT
 
 UNIVERSAL=0
 ALLOW_UNSIGNED=0
@@ -78,7 +94,8 @@ else
 fi
 
 mkdir -p "$DIST_DIR"
-rm -rf "$DERIVED" "$STAGE"
+rm -rf "$STAGE" "$DIST_DIR/DerivedData"
+DERIVED="$(mktemp -d "${TMPDIR:-/tmp}/weshome-break-dmg.XXXXXX")"
 
 echo "==> Generating Xcode project"
 (
@@ -125,8 +142,6 @@ fi
 
 echo "==> Checking code signature"
 CODESIGN_OUT="$(mktemp)"
-cleanup_tmp() { rm -f "$CODESIGN_OUT"; }
-trap cleanup_tmp EXIT
 set +e
 codesign --display --verbose=2 "$APP_PATH" >"$CODESIGN_OUT" 2>&1
 CODESIGN_STATUS=$?
@@ -188,5 +203,4 @@ hdiutil create \
   -format UDZO \
   "$DMG_PATH"
 
-rm -rf "$STAGE"
 echo "Done: $DMG_PATH"
