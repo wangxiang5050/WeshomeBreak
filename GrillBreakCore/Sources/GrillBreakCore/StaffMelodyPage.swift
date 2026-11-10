@@ -52,6 +52,8 @@ public enum StaffMelodyPage: Equatable, Sendable {
                     durationProportionPercent: durationProportionPercent
                 )
             )
+        } catch let error as MelodyLibraryError where error == .scoreNotLocal {
+            return .failed(message: error.localizedDescription)
         } catch {
             return .failed(message: Self.readFailureMessage)
         }

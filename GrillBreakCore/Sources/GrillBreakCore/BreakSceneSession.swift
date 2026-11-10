@@ -24,7 +24,8 @@ public final class StaffMelodySceneSession: BreakSceneSession {
     public static let sceneModeIdentifier = "staff-melody"
 
     /// User Melody chosen for this presentation. `nil` is the empty state.
-    public let melodyID: UUID?
+    /// Updated if that melody leaves the library during the rest.
+    @Published public var melodyID: UUID?
 
     @Published private var visibility = StaffMelodyVisibility()
 

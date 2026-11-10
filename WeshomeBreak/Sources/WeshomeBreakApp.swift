@@ -7,6 +7,7 @@ struct WeshomeBreakApp: App {
     @StateObject private var settingsStore: BreakSettingsStore
     @StateObject private var melodyLibraryStore: MelodyLibraryStore
     private let melodyLibrary: MelodyLibrary
+    private let melodyLibraryWatcher: MelodyLibraryDirectoryWatcher
     private let restOverlay: RestOverlay
     private let menuStatusTitleUpdater: MenuBarLiveStatusTitleUpdater
     private let loginLaunch: LoginLaunchController
@@ -14,12 +15,21 @@ struct WeshomeBreakApp: App {
 
     init() {
         let settingsStore = BreakSettingsStore()
-        let melodyLibrary = MelodyLibrary(rootDirectory: AppPaths.melodyLibraryRoot)
+        let melodyLibrary = MelodyLibrary(
+            sharedDirectory: AppPaths.sharedMelodyLibraryDirectory,
+            privateDirectory: AppPaths.privateMelodyLibraryRoot,
+            localStateDirectory: AppPaths.melodyLibraryLocalStateRoot,
+            sharedContainerIsReachable: AppPaths.iCloudDriveIsReachable
+        )
         let melodyLibraryStore = MelodyLibraryStore(library: melodyLibrary)
+        let melodyLibraryWatcher = MelodyLibraryDirectoryWatcher {
+            melodyLibraryStore.reloadFromDisk()
+        }
         let breakCycle = BreakCycle(settingsStore: settingsStore)
         let sceneModes: [BreakSceneMode] = [
             StaffMelodySceneMode(
                 library: melodyLibrary,
+                melodyLibraryStore: melodyLibraryStore,
                 settingsStore: settingsStore,
                 breakCycle: breakCycle,
                 selectionState: MelodySelectionState(
@@ -31,6 +41,7 @@ struct WeshomeBreakApp: App {
         let loginLaunch = LoginLaunchController()
 
         self.melodyLibrary = melodyLibrary
+        self.melodyLibraryWatcher = melodyLibraryWatcher
         self.loginLaunch = loginLaunch
         _settingsStore = StateObject(wrappedValue: settingsStore)
         _melodyLibraryStore = StateObject(wrappedValue: melodyLibraryStore)
@@ -48,6 +59,7 @@ struct WeshomeBreakApp: App {
         menuStatusTitleUpdater = MenuBarLiveStatusTitleUpdater(breakCycle: breakCycle)
         menuStatusTitleUpdater.start()
         loginLaunch.apply(enabled: settingsStore.launchAtLogin)
+        melodyLibraryWatcher.start()
     }
 
     var body: some Scene {

@@ -19,6 +19,7 @@ struct SettingsView: View {
 
     @State private var isImporting = false
     @State private var editingTitles: [UUID: String] = [:]
+    @State private var titleBaselines: [UUID: String] = [:]
     @FocusState private var focusedMelodyID: UUID?
 
     private static let durationRange: ClosedRange<Double> = 1...120
@@ -91,6 +92,11 @@ struct SettingsView: View {
             }
 
             Section("旋律库") {
+                Text(melodyLibraryStore.residenceSummary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 Button("导入 MusicXML…") {
                     isImporting = true
                 }
@@ -141,8 +147,12 @@ struct SettingsView: View {
             }
         }
         .onChange(of: focusedMelodyID) { oldValue, newValue in
-            guard let oldValue, oldValue != newValue else { return }
-            commitTitle(id: oldValue)
+            if let oldValue, oldValue != newValue {
+                commitTitle(id: oldValue)
+            }
+            if let newValue {
+                beginTitleEdit(id: newValue)
+            }
         }
         .onDisappear {
             if let focusedMelodyID {
@@ -237,18 +247,29 @@ struct SettingsView: View {
         )
     }
 
+    private func beginTitleEdit(id: UUID) {
+        guard editingTitles[id] == nil,
+              let title = melodyLibraryStore.melodies.first(where: { $0.id == id })?.title else {
+            return
+        }
+        editingTitles[id] = title
+        titleBaselines[id] = title
+    }
+
     private func commitTitle(id: UUID) {
-        guard let melody = melodyLibraryStore.melodies.first(where: { $0.id == id }) else {
-            editingTitles[id] = nil
-            return
-        }
-        let draft = editingTitles[id] ?? melody.title
-        if draft.trimmingCharacters(in: .whitespacesAndNewlines) == melody.title {
-            editingTitles[id] = nil
-            return
-        }
-        melodyLibraryStore.rename(id: id, to: draft)
+        let draft = editingTitles[id]
+        let baseline = titleBaselines[id]
         editingTitles[id] = nil
+        titleBaselines[id] = nil
+        guard let melody = melodyLibraryStore.melodies.first(where: { $0.id == id }) else {
+            return
+        }
+        let text = draft ?? melody.title
+        let original = baseline ?? text
+        if text.trimmingCharacters(in: .whitespacesAndNewlines) == original.trimmingCharacters(in: .whitespacesAndNewlines) {
+            return
+        }
+        melodyLibraryStore.rename(id: id, to: text)
     }
 
     /// Staff Notation Scale: applies to both the Staff Melody Scene (next

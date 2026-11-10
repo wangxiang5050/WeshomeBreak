@@ -105,7 +105,32 @@ struct StaffMelodyPageTests {
             Issue.record("expected failed page, got \(page)")
             return
         }
-        #expect(!message.isEmpty)
+        #expect(message == "这份旋律还不能读。若刚从另一台 Mac 同步，请稍候，不要再次导入。")
+    }
+
+    @Test
+    func failedWhenScoreFileIsEmptyAsksToReimport() throws {
+        let (library, root) = try makeLibrary(importing: MusicXMLFixtures.simpleFourMeasures)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        guard let melody = library.currentMelody() else {
+            Issue.record("expected a current melody after import")
+            return
+        }
+        let scoreURL = root.appendingPathComponent("scores/\(melody.id.uuidString).musicxml")
+        try Data().write(to: scoreURL)
+
+        let page = StaffMelodyPage.prepare(
+            from: library,
+            scalePercent: 60,
+            durationProportionPercent: 60
+        )
+
+        guard case .failed(let message) = page else {
+            Issue.record("expected failed page, got \(page)")
+            return
+        }
+        #expect(message == "无法读取旋律，请在设置中重新导入。")
     }
 
     @Test

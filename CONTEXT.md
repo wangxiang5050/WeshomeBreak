@@ -25,12 +25,12 @@ The outcome of engraving one User Melody: empty, failed, or ready HTML for Score
 _Avoid_: StaffMelodyContent, resolver output, engraving prep (those were shallow pass-through names)
 
 **User Melody**:
-A melody the user provides for display on the Staff Melody Scene. Product-bundled melodies are not a required content source.
+A melody the user provides for display on the Staff Melody Scene. Each melody has a stable identity. Imported notation does not change afterward; the title may. Importing the same file again creates a new melody. A melody whose notation file cannot be read is still in the library. Product-bundled melodies are not a required content source.
 _Avoid_: song (implies lyrics/arrangement), track, random phrase
 
 **Melody Entry**:
-The process of getting a User Melody into the app. Phase 1 is offline conversion into a stored score file, then import; later phases may add in-app image capture.
-_Avoid_: OCR-only wording when the phase is still manual/tool-assisted import
+The process of getting a User Melody into the app. Phase 1 is offline conversion into a stored score file, then import through the app. A file placed in the library folder by hand is not a melody and does not skip the import gate. Later phases may add in-app image capture.
+_Avoid_: OCR-only wording when the phase is still manual/tool-assisted import; treating the library folder as a drop folder
 
 **Staff Melody (v1 scope)**:
 A monophonic staff excerpt intended to fit roughly 4–8 measures (more than 8 is allowed with a warning). Includes clef (treble or bass, including mid-excerpt clef/key changes), time signature, key signature, pitches with accidentals, durations (including dotted values), common triplets, rests, barlines, beams, and ties. No polyphony, chords, lyrics, slurs, nested tuplets, or non-triplet tuplet ratios. Import accepts only a single part and a single voice; files outside this subset are rejected entirely.
@@ -61,11 +61,15 @@ Phase 1 displays accepted MusicXML by engraving with Verovio (SVG), not a from-s
 _Avoid_: treating Verovio as a reason to skip the import subset gate
 
 **Melody Library**:
-The set of imported User Melodies available to the Staff Melody Scene. Empty library shows an actionable empty state on the Rest Overlay (countdown still runs).
+The set of imported User Melodies available to the Staff Melody Scene. The owner has one shared library, the same on each of their Macs signed into the same Apple ID. An acquaintance has a separate library; receiving the app does not include the owner's melodies. Membership is the union of those Macs' imports. Removing a melody wins over a rename of that same melody on another Mac. Titles are unique; a clash takes a numeric suffix, as on a same-Mac import. Changes made on the owner's other Macs belong to the library while the app is running. Empty library shows an actionable empty state on the Rest Overlay (countdown still runs).
 _Avoid_: playlist, catalog (unless UI copy)
 
+**Private Melody Library**:
+The Melody Library on a Mac that cannot reach the owner's shared library. It is folded into the shared library once, when that library becomes reachable, and is not a source of melodies after that.
+_Avoid_: local cache, backup copy, offline mirror
+
 **Melody Selection**:
-Which User Melody from the Melody Library is shown on a Staff Melody Scene. Manual pick stores one current melody. 「随机旋律」 draws one melody for each new rest when Scene Mode Selection is fixed to Staff Melody, excluding the melody shown on the previous Staff Melody rest, and does not replace the manual pick. A delay shows that same melody again. Distinct from **Scene Mode Selection** (which Break Scene Mode to show).
+Which User Melody from the Melody Library is shown on a Staff Melody Scene. The manual current melody belongs to this Mac, not to the shared Melody Library. 「随机旋律」 draws one melody for each new rest when Scene Mode Selection is fixed to Staff Melody, excluding the melody shown on the previous Staff Melody rest, and does not replace the manual pick. A delay shows that same melody again. Distinct from **Scene Mode Selection** (which Break Scene Mode to show).
 _Avoid_: mode selection, scene selection (those refer to Break Scene Mode)
 
 **Staff Melody Visibility**:

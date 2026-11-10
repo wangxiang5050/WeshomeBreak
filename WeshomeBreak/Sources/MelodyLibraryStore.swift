@@ -10,6 +10,8 @@ final class MelodyLibraryStore: ObservableObject {
 
     @Published private(set) var melodies: [UserMelody] = []
     @Published private(set) var selectedMelodyID: UUID?
+    @Published private(set) var residenceSummary: String = ""
+    @Published private(set) var revision: Int = 0
     @Published private(set) var feedback: Feedback = .none
 
     enum Feedback: Equatable {
@@ -38,6 +40,14 @@ final class MelodyLibraryStore: ObservableObject {
     func refresh() {
         melodies = library.melodies()
         selectedMelodyID = library.selectedMelodyID
+        residenceSummary = library.residenceSummary
+        revision += 1
+    }
+
+    /// Reloads the library from disk and publishes only when it changed.
+    func reloadFromDisk() {
+        guard library.reload() else { return }
+        refresh()
     }
 
     func importFile(at url: URL) {

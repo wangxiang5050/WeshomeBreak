@@ -25,6 +25,7 @@ struct StaffMelodySceneMode: BreakSceneMode {
     let displayName = "五线谱旋律"
 
     let library: MelodyLibrary
+    let melodyLibraryStore: MelodyLibraryStore
     let settingsStore: BreakSettingsStore
     let breakCycle: BreakCycle
     let selectionState: MelodySelectionState
@@ -54,14 +55,40 @@ struct StaffMelodySceneMode: BreakSceneMode {
         // screen engraves the same User Melody. Scale and Duration Proportion
         // are read here, so a delay that presents again picks up the current
         // values while keeping that melody.
-        let melodyID = (session as? StaffMelodySceneSession)?.melodyID
-        let page = StaffMelodyPage.prepare(
-            from: library,
-            melodyID: melodyID,
-            scalePercent: settingsStore.staffNotationScalePercent,
-            durationProportionPercent: settingsStore.durationProportionPercent
+        guard let staffSession = session as? StaffMelodySceneSession else {
+            return AnyView(EmptyView())
+        }
+        // Captured here so a mid-break settings change does not resize the
+        // score. Library edits still re-engrave through the store.
+        let scalePercent = settingsStore.staffNotationScalePercent
+        let durationProportionPercent = settingsStore.durationProportionPercent
+        return AnyView(StaffMelodySceneView(
+            melodyLibraryStore: melodyLibraryStore,
+            session: staffSession,
+            library: library,
+            scalePercent: scalePercent,
+            durationProportionPercent: durationProportionPercent,
+            reconcile: { [self] session in
+                reconcileRest(session)
+            }
+        ))
+    }
+
+    /// If the melody chosen for this rest has left the library, draw again
+    /// with the existing held-rest rule. A score file arriving for the same
+    /// melody keeps that choice.
+    @MainActor
+    func reconcileRest(_ session: StaffMelodySceneSession) {
+        guard breakCycle.phase == .resting else { return }
+        let melody = selectionState.beginPresentation(
+            melodies: library.melodies(),
+            using: melodyStrategy(),
+            continuingSameRest: true
         )
-        return AnyView(StaffMelodySceneView(page: page, session: session))
+        if settingsStore.lastShownMelodyID != selectionState.lastShownMelodyID {
+            settingsStore.lastShownMelodyID = selectionState.lastShownMelodyID
+        }
+        session.melodyID = melody?.id
     }
 
     /// Random only while Scene Mode Selection is fixed to this scene and the
@@ -77,8 +104,12 @@ struct StaffMelodySceneMode: BreakSceneMode {
 }
 
 struct StaffMelodySceneView: View {
-    let page: StaffMelodyPage
-    @ObservedObject var session: BreakSceneSession
+    @ObservedObject var melodyLibraryStore: MelodyLibraryStore
+    @ObservedObject var session: StaffMelodySceneSession
+    let library: MelodyLibrary
+    let scalePercent: Int
+    let durationProportionPercent: Int
+    let reconcile: (StaffMelodySceneSession) -> Void
 
     var body: some View {
         ZStack {
@@ -94,6 +125,18 @@ struct StaffMelodySceneView: View {
             }
         }
         .ignoresSafeArea()
+        .onChange(of: melodyLibraryStore.revision) { _, _ in
+            reconcile(session)
+        }
+    }
+
+    private var page: StaffMelodyPage {
+        StaffMelodyPage.prepare(
+            from: library,
+            melodyID: session.melodyID,
+            scalePercent: scalePercent,
+            durationProportionPercent: durationProportionPercent
+        )
     }
 }
 

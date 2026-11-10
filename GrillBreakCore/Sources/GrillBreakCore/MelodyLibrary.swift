@@ -25,6 +25,8 @@ public enum MelodyLibraryError: Error, Equatable, Sendable, LocalizedError {
     case ioFailure(String)
     case emptyTitle
     case duplicateTitle(String)
+    /// The melody is still in the library, but its score file is not on this Mac yet.
+    case scoreNotLocal
 
     public var errorDescription: String? {
         switch self {
@@ -41,71 +43,160 @@ public enum MelodyLibraryError: Error, Equatable, Sendable, LocalizedError {
             return "名称不能为空。"
         case .duplicateTitle(let title):
             return "已有同名旋律「\(title)」。"
+        case .scoreNotLocal:
+            return "这份旋律还不能读。若刚从另一台 Mac 同步，请稍候，不要再次导入。"
         }
     }
 }
 
-/// Persists imported User Melodies under an injectable root directory and
-/// tracks the manually selected "current" melody (Melody Selection v1).
+/// Whether this Mac is using the owner's shared Melody Library or its private one.
+public enum MelodyLibraryResidence: Equatable, Sendable {
+    case shared
+    case privateLibrary
+}
+
+/// Persists imported User Melodies and the manual current melody.
+///
+/// Each Mac writes only its own device log. `reload()` merges every log in the
+/// active directory, so two Macs sharing one directory converge without either
+/// overwriting the other's file. The manual current melody stays in
+/// `localStateDirectory` and is never written into the shared directory.
+/// When `sharedContainerIsReachable` is true and the shared directory is a
+/// different folder, a private library there is folded in once and then retired.
 public final class MelodyLibrary: @unchecked Sendable {
-    private let rootDirectory: URL
+    private let sharedDirectory: URL
+    private let privateDirectory: URL
+    private let localStateDirectory: URL
+    private let sharedContainerIsReachable: @Sendable () -> Bool
+    private let now: @Sendable () -> Date
     private let fileManager: FileManager
     private let gate: MusicXMLImportGate
     private let fileLoader: MusicXMLFileLoader
-    private let manifestURL: URL
-    private let scoresDirectory: URL
+    private let deviceID: UUID
+    private let lock = NSLock()
 
-    private var manifest: Manifest
+    private var residence: MelodyLibraryResidence = .privateLibrary
+    private var manualSelection: UUID?
+    private var ourRecords: [UUID: DeviceMelodyRecord] = [:]
+    private var displayMelodies: [UserMelody] = []
+    private var tombstonedIDs: Set<UUID> = []
 
-    public init(
+    /// Private library at `rootDirectory`, including its manual selection.
+    /// Used when this Mac cannot reach the shared library.
+    public convenience init(
         rootDirectory: URL,
         fileManager: FileManager = .default,
         gate: MusicXMLImportGate = MusicXMLImportGate(),
         fileLoader: MusicXMLFileLoader = MusicXMLFileLoader()
     ) {
-        self.rootDirectory = rootDirectory
-        self.fileManager = fileManager
-        self.gate = gate
-        self.fileLoader = fileLoader
-        self.manifestURL = rootDirectory.appendingPathComponent("manifest.json")
-        self.scoresDirectory = rootDirectory.appendingPathComponent("scores", isDirectory: true)
-        self.manifest = Manifest(melodies: [], selectedMelodyID: nil)
-
-        try? fileManager.createDirectory(at: scoresDirectory, withIntermediateDirectories: true)
-        if let loaded = try? loadManifest() {
-            self.manifest = loaded
-        } else {
-            try? saveManifest()
-        }
-    }
-
-    public func melodies() -> [UserMelody] {
-        manifest.melodies
-    }
-
-    public var selectedMelodyID: UUID? {
-        manifest.selectedMelodyID
-    }
-
-    /// Resolves the current melody using the stored manual selection.
-    public func currentMelody() -> UserMelody? {
-        guard let selectedMelodyID else { return nil }
-        return MelodySelection.resolve(
-            melodies: manifest.melodies,
-            melodyID: selectedMelodyID
+        self.init(
+            sharedDirectory: rootDirectory,
+            privateDirectory: rootDirectory,
+            localStateDirectory: rootDirectory,
+            sharedContainerIsReachable: { false },
+            now: Date.init,
+            fileManager: fileManager,
+            gate: gate,
+            fileLoader: fileLoader
         )
     }
 
+    /// `sharedDirectory` is the owner's shared library when the container is
+    /// reachable. `privateDirectory` is this Mac's private library otherwise.
+    /// `localStateDirectory` holds this Mac's device id and manual selection.
+    public init(
+        sharedDirectory: URL,
+        privateDirectory: URL,
+        localStateDirectory: URL,
+        sharedContainerIsReachable: @escaping @Sendable () -> Bool,
+        now: @escaping @Sendable () -> Date = Date.init,
+        fileManager: FileManager = .default,
+        gate: MusicXMLImportGate = MusicXMLImportGate(),
+        fileLoader: MusicXMLFileLoader = MusicXMLFileLoader()
+    ) {
+        self.sharedDirectory = sharedDirectory
+        self.privateDirectory = privateDirectory
+        self.localStateDirectory = localStateDirectory
+        self.sharedContainerIsReachable = sharedContainerIsReachable
+        self.now = now
+        self.fileManager = fileManager
+        self.gate = gate
+        self.fileLoader = fileLoader
+        if !fileManager.fileExists(atPath: localStateDirectory.path) {
+            try? fileManager.createDirectory(at: localStateDirectory, withIntermediateDirectories: true)
+        }
+        self.deviceID = Self.loadOrCreateDeviceID(in: localStateDirectory, fileManager: fileManager)
+        self.manualSelection = Self.readSelection(in: localStateDirectory, fileManager: fileManager)
+        activate()
+    }
+
+    public func melodies() -> [UserMelody] {
+        lock.lock()
+        defer { lock.unlock() }
+        return displayMelodies
+    }
+
+    public var currentResidence: MelodyLibraryResidence {
+        lock.lock()
+        defer { lock.unlock() }
+        return residence
+    }
+
+    public var residenceSummary: String {
+        switch currentResidence {
+        case .shared:
+            return "曲库在 iCloud 云盘，同一 Apple ID 的 Mac 会保持一致。"
+        case .privateLibrary:
+            return "曲库只在这台 Mac 上。iCloud 云盘不可用，其他 Mac 看不到这里的旋律。"
+        }
+    }
+
+    public var selectedMelodyID: UUID? {
+        lock.lock()
+        defer { lock.unlock() }
+        return manualSelection
+    }
+
+    public func currentMelody() -> UserMelody? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let manualSelection else { return nil }
+        return displayMelodies.first { $0.id == manualSelection }
+    }
+
     public func musicXML(for id: UUID) throws -> String {
-        let url = scoreURL(for: id)
-        guard fileManager.fileExists(atPath: url.path) else {
+        lock.lock()
+        defer { lock.unlock() }
+        guard displayMelodies.contains(where: { $0.id == id }) else {
             throw MelodyLibraryError.melodyNotFound(id)
+        }
+        let url = scoreURL(for: id, in: activeDirectory)
+        guard fileManager.fileExists(atPath: url.path) else {
+            requestDownloadIfUbiquitous(url)
+            throw MelodyLibraryError.scoreNotLocal
+        }
+        let values = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
+        if values?.ubiquitousItemDownloadingStatus == .notDownloaded {
+            requestDownloadIfUbiquitous(url)
+            throw MelodyLibraryError.scoreNotLocal
         }
         do {
             return try String(contentsOf: url, encoding: .utf8)
         } catch {
             throw MelodyLibraryError.ioFailure(error.localizedDescription)
         }
+    }
+
+    /// Re-reads the active library and folds a private library in when the
+    /// shared container is reachable. Returns whether membership, titles,
+    /// selection, residence, or score-file presence changed.
+    @discardableResult
+    public func reload() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let before = snapshot()
+        activate()
+        return snapshot() != before
     }
 
     @discardableResult
@@ -135,55 +226,492 @@ public final class MelodyLibrary: @unchecked Sendable {
     }
 
     public func select(id: UUID) throws {
-        guard manifest.melodies.contains(where: { $0.id == id }) else {
+        lock.lock()
+        defer { lock.unlock() }
+        guard displayMelodies.contains(where: { $0.id == id }) else {
             throw MelodyLibraryError.melodyNotFound(id)
         }
-        manifest.selectedMelodyID = id
-        try saveManifest()
+        manualSelection = id
+        try saveSelection()
     }
 
     public func delete(id: UUID) throws {
-        guard manifest.melodies.contains(where: { $0.id == id }) else {
+        lock.lock()
+        defer { lock.unlock() }
+        guard displayMelodies.contains(where: { $0.id == id }) else {
             throw MelodyLibraryError.melodyNotFound(id)
         }
-        manifest.melodies.removeAll { $0.id == id }
-        if manifest.selectedMelodyID == id {
-            manifest.selectedMelodyID = nil
+        var record = ourRecords[id] ?? synthesizedRecord(id: id)
+        record.deletedAt = now()
+        ourRecords[id] = record
+        if manualSelection == id {
+            manualSelection = nil
+            try saveSelection()
         }
-        try saveManifest()
-        let url = scoreURL(for: id)
+        try saveOurLog()
+        let url = scoreURL(for: id, in: activeDirectory)
         if fileManager.fileExists(atPath: url.path) {
             try fileManager.removeItem(at: url)
         }
+        rebuildMerged()
     }
 
     public func rename(id: UUID, to rawTitle: String) throws {
-        guard let index = manifest.melodies.firstIndex(where: { $0.id == id }) else {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let current = displayMelodies.first(where: { $0.id == id }) else {
             throw MelodyLibraryError.melodyNotFound(id)
         }
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else {
             throw MelodyLibraryError.emptyTitle
         }
-        if manifest.melodies.contains(where: { $0.id != id && $0.title == title }) {
+        if displayMelodies.contains(where: { $0.id != id && $0.title == title }) {
             throw MelodyLibraryError.duplicateTitle(title)
         }
-        let existing = manifest.melodies[index]
-        if existing.title == title {
+        if current.title == title {
             return
         }
-        manifest.melodies[index] = UserMelody(
-            id: existing.id,
-            title: title,
-            measureCount: existing.measureCount
-        )
-        try saveManifest()
+        var record = ourRecords[id] ?? synthesizedRecord(id: id)
+        record.title = title
+        record.titleChangedAt = now()
+        record.deletedAt = nil
+        ourRecords[id] = record
+        try saveOurLog()
+        rebuildMerged()
     }
 
-    // MARK: - Private
+    // MARK: - Activation
+
+    private var activeDirectory: URL {
+        residence == .shared ? sharedDirectory : privateDirectory
+    }
+
+    private func activate() {
+        if sharedContainerIsReachable(), !sameDirectory(sharedDirectory, privateDirectory) {
+            residence = .shared
+            ensureLibraryDirectories(sharedDirectory)
+            loadOurRecords(from: sharedDirectory)
+            foldPrivateLibraryIntoShared()
+            adoptLegacyManifest(in: sharedDirectory)
+        } else if sharedContainerIsReachable() {
+            residence = .shared
+            ensureLibraryDirectories(sharedDirectory)
+            loadOurRecords(from: sharedDirectory)
+            adoptLegacyManifest(in: sharedDirectory)
+        } else {
+            residence = .privateLibrary
+            ensureLibraryDirectories(privateDirectory)
+            loadOurRecords(from: privateDirectory)
+            adoptLegacyManifest(in: privateDirectory)
+        }
+        rebuildMerged()
+        clearSelectionIfTombstoned()
+    }
+
+    private func foldPrivateLibraryIntoShared() {
+        guard !sameDirectory(privateDirectory, sharedDirectory) else { return }
+        guard privateLogsAreReadable() else { return }
+        let contribution = privateContribution()
+        guard contribution.hasCatalog else { return }
+
+        if manualSelection == nil, let selection = contribution.selection {
+            manualSelection = selection
+            try? saveSelection()
+        }
+
+        let buried = tombstones(in: sharedDirectory)
+        let before = ourRecords
+        var copiesSucceeded = true
+        for record in contribution.records {
+            if buried.contains(record.id), record.deletedAt == nil {
+                continue
+            }
+            if !mergePrivateRecord(record) {
+                copiesSucceeded = false
+            }
+        }
+        var saved = true
+        if ourRecords != before {
+            do {
+                try saveOurLog()
+            } catch {
+                saved = false
+            }
+        }
+        if copiesSucceeded && saved {
+            retirePrivateCatalog()
+        }
+    }
+
+    /// Returns false when a score that exists only in the private library could not be copied.
+    private func mergePrivateRecord(_ record: DeviceMelodyRecord) -> Bool {
+        guard var existing = ourRecords[record.id] else {
+            ourRecords[record.id] = record
+            if record.deletedAt == nil {
+                return copyPrivateScore(id: record.id)
+            }
+            removeSharedScore(id: record.id)
+            return true
+        }
+        if record.deletedAt != nil || existing.deletedAt != nil {
+            existing.deletedAt = [record.deletedAt, existing.deletedAt].compactMap { $0 }.min()
+            existing.importedAt = min(existing.importedAt, record.importedAt)
+            ourRecords[record.id] = existing
+            removeSharedScore(id: record.id)
+            return true
+        }
+        existing.importedAt = min(existing.importedAt, record.importedAt)
+        if record.titleChangedAt >= existing.titleChangedAt {
+            existing.title = record.title
+            existing.titleChangedAt = record.titleChangedAt
+        }
+        ourRecords[record.id] = existing
+        return copyPrivateScore(id: record.id)
+    }
+
+    private func adoptLegacyManifest(in directory: URL) {
+        let url = directory.appendingPathComponent("manifest.json")
+        guard fileManager.fileExists(atPath: url.path) else { return }
+        guard let manifest = readLegacyManifest(at: url) else { return }
+        if manualSelection == nil {
+            manualSelection = manifest.selectedMelodyID
+            do {
+                try saveSelection()
+            } catch {
+                manualSelection = nil
+                return
+            }
+        }
+        let buried = tombstones(in: directory)
+        let base = Date(timeIntervalSince1970: 0)
+        var changed = false
+        for (index, melody) in manifest.melodies.enumerated() {
+            if ourRecords[melody.id] != nil || buried.contains(melody.id) {
+                continue
+            }
+            let when = base.addingTimeInterval(TimeInterval(index))
+            ourRecords[melody.id] = DeviceMelodyRecord(
+                id: melody.id,
+                title: melody.title,
+                measureCount: melody.measureCount,
+                importedAt: when,
+                titleChangedAt: when,
+                deletedAt: nil
+            )
+            changed = true
+        }
+        if changed {
+            do {
+                try saveOurLog()
+            } catch {
+                return
+            }
+        }
+        try? fileManager.removeItem(at: url)
+    }
+
+    private func retirePrivateCatalog() {
+        let root = privateDirectory
+        try? fileManager.removeItem(at: root.appendingPathComponent("manifest.json"))
+        try? fileManager.removeItem(at: root.appendingPathComponent("devices", isDirectory: true))
+        try? fileManager.removeItem(at: root.appendingPathComponent("scores", isDirectory: true))
+        if !sameDirectory(root, localStateDirectory) {
+            try? fileManager.removeItem(at: root.appendingPathComponent("selection.json"))
+            try? fileManager.removeItem(at: root.appendingPathComponent("device-id"))
+        }
+    }
+
+    private func clearSelectionIfTombstoned() {
+        guard let manualSelection, tombstonedIDs.contains(manualSelection) else { return }
+        self.manualSelection = nil
+        try? saveSelection()
+    }
+
+    private func loadOurRecords(from directory: URL) {
+        let url = deviceLogURL(in: directory)
+        guard let data = try? Data(contentsOf: url),
+              let file = try? Self.makeDecoder().decode(DeviceLogFile.self, from: data) else {
+            ourRecords = [:]
+            return
+        }
+        ourRecords = Dictionary(uniqueKeysWithValues: file.records.map { ($0.id, $0) })
+    }
+
+    private func rebuildMerged() {
+        var logs = readAllDeviceLogs(in: activeDirectory)
+        logs.removeAll { $0.deviceID == deviceID }
+        logs.append((deviceID, ourRecords.values.sorted(by: Self.recordOrder)))
+        let merged = Self.merge(logs)
+        tombstonedIDs = Set(merged.filter(\.isDeleted).map(\.id))
+        displayMelodies = Self.displayMelodies(from: merged.filter { !$0.isDeleted })
+    }
+
+    // MARK: - Import
 
     private static let emptyFilenameStemMessage = "文件名无效，请使用带主文件名的 .musicxml、.mxl 或 .xml。"
     private static let supportedTitleExtensions: Set<String> = ["musicxml", "mxl", "xml"]
+
+    private func importAccepted(_ musicXML: String, title: String) -> MelodyImportOutcome {
+        lock.lock()
+        defer { lock.unlock() }
+        switch gate.evaluate(musicXML) {
+        case .rejected(let reason):
+            return .rejected(reason: reason)
+        case .accepted(let draft):
+            return store(draft: draft, title: uniquifiedTitle(title))
+        }
+    }
+
+    private func uniquifiedTitle(_ base: String) -> String {
+        Self.uniquified(base, taken: Set(displayMelodies.map(\.title)))
+    }
+
+    private func store(draft: ImportedMelodyDraft, title: String) -> MelodyImportOutcome {
+        let melodyID = UUID()
+        let when = now()
+        let record = DeviceMelodyRecord(
+            id: melodyID,
+            title: title,
+            measureCount: draft.measureCount,
+            importedAt: when,
+            titleChangedAt: when,
+            deletedAt: nil
+        )
+        let score = scoreURL(for: melodyID, in: activeDirectory)
+        do {
+            ensureLibraryDirectories(activeDirectory)
+            try draft.musicXML.write(to: score, atomically: true, encoding: .utf8)
+            var updated = ourRecords
+            updated[melodyID] = record
+            try saveOurLog(updated)
+            ourRecords = updated
+        } catch {
+            try? fileManager.removeItem(at: score)
+            return .rejected(reason: MusicXMLFileLoader.fallbackMessage(
+                """
+                无法保存旋律文件。
+                请检查磁盘空间后重试。
+                """,
+                diagnostic: error.localizedDescription
+            ))
+        }
+        if manualSelection == nil {
+            manualSelection = melodyID
+            try? saveSelection()
+        }
+        rebuildMerged()
+        let shown = displayMelodies.first { $0.id == melodyID }
+            ?? UserMelody(id: melodyID, title: title, measureCount: draft.measureCount)
+        return .imported(shown, warnings: draft.warnings)
+    }
+
+    // MARK: - Files
+
+    private func scoreURL(for id: UUID, in directory: URL) -> URL {
+        directory
+            .appendingPathComponent("scores", isDirectory: true)
+            .appendingPathComponent("\(id.uuidString).musicxml")
+    }
+
+    private func deviceLogURL(in directory: URL) -> URL {
+        directory
+            .appendingPathComponent("devices", isDirectory: true)
+            .appendingPathComponent("\(deviceID.uuidString).json")
+    }
+
+    private func ensureLibraryDirectories(_ directory: URL) {
+        for url in [
+            directory,
+            directory.appendingPathComponent("scores", isDirectory: true),
+            directory.appendingPathComponent("devices", isDirectory: true)
+        ] where !fileManager.fileExists(atPath: url.path) {
+            try? fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+    }
+
+    private func saveOurLog() throws {
+        try saveOurLog(ourRecords)
+    }
+
+    private func saveOurLog(_ records: [UUID: DeviceMelodyRecord]) throws {
+        ensureLibraryDirectories(activeDirectory)
+        let payload = DeviceLogFile(records: records.values.sorted(by: Self.recordOrder))
+        let data = try Self.makeEncoder().encode(payload)
+        try data.write(to: deviceLogURL(in: activeDirectory), options: .atomic)
+    }
+
+    private func saveSelection() throws {
+        if !fileManager.fileExists(atPath: localStateDirectory.path) {
+            try fileManager.createDirectory(at: localStateDirectory, withIntermediateDirectories: true)
+        }
+        let data = try JSONEncoder().encode(SelectionFile(selectedMelodyID: manualSelection))
+        try data.write(to: localStateDirectory.appendingPathComponent("selection.json"), options: .atomic)
+    }
+
+    private func requestDownloadIfUbiquitous(_ url: URL) {
+        let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey])
+        let placeholder = URL(fileURLWithPath: url.path + ".icloud")
+        guard values?.isUbiquitousItem == true || fileManager.fileExists(atPath: placeholder.path) else {
+            return
+        }
+        try? fileManager.startDownloadingUbiquitousItem(at: url)
+    }
+
+    private func copyPrivateScore(id: UUID) -> Bool {
+        let source = scoreURL(for: id, in: privateDirectory)
+        let destination = scoreURL(for: id, in: sharedDirectory)
+        if !fileManager.fileExists(atPath: source.path) {
+            return true
+        }
+        if fileManager.fileExists(atPath: destination.path) {
+            return true
+        }
+        ensureLibraryDirectories(sharedDirectory)
+        do {
+            try fileManager.copyItem(at: source, to: destination)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func removeSharedScore(id: UUID) {
+        let url = scoreURL(for: id, in: sharedDirectory)
+        if fileManager.fileExists(atPath: url.path) {
+            try? fileManager.removeItem(at: url)
+        }
+    }
+
+    private func synthesizedRecord(id: UUID) -> DeviceMelodyRecord {
+        let shown = displayMelodies.first { $0.id == id }
+        return DeviceMelodyRecord(
+            id: id,
+            title: shown?.title ?? "",
+            measureCount: shown?.measureCount ?? 0,
+            importedAt: now(),
+            titleChangedAt: now(),
+            deletedAt: nil
+        )
+    }
+
+    private func snapshot() -> Snapshot {
+        var bytes: [UUID: Int] = [:]
+        for melody in displayMelodies {
+            bytes[melody.id] = scoreByteCount(melody.id)
+        }
+        return Snapshot(
+            residence: residence,
+            selection: manualSelection,
+            melodies: displayMelodies,
+            scoreBytes: bytes
+        )
+    }
+
+    private func scoreByteCount(_ id: UUID) -> Int {
+        let url = scoreURL(for: id, in: activeDirectory)
+        guard fileManager.fileExists(atPath: url.path) else { return -1 }
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .ubiquitousItemDownloadingStatusKey])
+        if values?.ubiquitousItemDownloadingStatus == .notDownloaded {
+            return -1
+        }
+        return values?.fileSize ?? 0
+    }
+
+    // MARK: - Private catalog
+
+    private struct PrivateContribution {
+        var records: [DeviceMelodyRecord]
+        var selection: UUID?
+        var hasCatalog: Bool
+    }
+
+    private func privateContribution() -> PrivateContribution {
+        var records: [UUID: DeviceMelodyRecord] = [:]
+        for (_, logRecords) in readAllDeviceLogs(in: privateDirectory) {
+            for record in logRecords {
+                records[record.id] = record
+            }
+        }
+        var selection = Self.readSelection(in: privateDirectory, fileManager: fileManager)
+        var hasCatalog = !records.isEmpty || selection != nil
+        if let manifest = readLegacyManifest(at: privateDirectory.appendingPathComponent("manifest.json")) {
+            hasCatalog = true
+            if selection == nil {
+                selection = manifest.selectedMelodyID
+            }
+            let base = Date(timeIntervalSince1970: 0)
+            for (index, melody) in manifest.melodies.enumerated() where records[melody.id] == nil {
+                let when = base.addingTimeInterval(TimeInterval(index))
+                records[melody.id] = DeviceMelodyRecord(
+                    id: melody.id,
+                    title: melody.title,
+                    measureCount: melody.measureCount,
+                    importedAt: when,
+                    titleChangedAt: when,
+                    deletedAt: nil
+                )
+            }
+        }
+        let scores = privateDirectory.appendingPathComponent("scores", isDirectory: true)
+        if fileManager.fileExists(atPath: scores.path) {
+            hasCatalog = true
+        }
+        if fileManager.fileExists(atPath: privateDirectory.appendingPathComponent("devices").path) {
+            hasCatalog = true
+        }
+        return PrivateContribution(records: Array(records.values), selection: selection, hasCatalog: hasCatalog)
+    }
+
+    private func privateLogsAreReadable() -> Bool {
+        let directory = privateDirectory.appendingPathComponent("devices", isDirectory: true)
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ) else { return true }
+        for url in urls where url.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: url),
+                  (try? Self.makeDecoder().decode(DeviceLogFile.self, from: data)) != nil else {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func tombstones(in directory: URL) -> Set<UUID> {
+        var ids = Set<UUID>()
+        for (_, records) in readAllDeviceLogs(in: directory) {
+            for record in records where record.deletedAt != nil {
+                ids.insert(record.id)
+            }
+        }
+        return ids
+    }
+
+    private func readAllDeviceLogs(in directory: URL) -> [(deviceID: UUID, records: [DeviceMelodyRecord])] {
+        let directory = directory.appendingPathComponent("devices", isDirectory: true)
+        guard let urls = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ) else { return [] }
+        var logs: [(deviceID: UUID, records: [DeviceMelodyRecord])] = []
+        for url in urls where url.pathExtension == "json" {
+            guard let deviceID = UUID(uuidString: url.deletingPathExtension().lastPathComponent),
+                  let data = try? Data(contentsOf: url),
+                  let file = try? Self.makeDecoder().decode(DeviceLogFile.self, from: data) else {
+                continue
+            }
+            logs.append((deviceID, file.records))
+        }
+        return logs
+    }
+
+    private func readLegacyManifest(at url: URL) -> LegacyManifest? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(LegacyManifest.self, from: data)
+    }
+
+    // MARK: - Names and paths
 
     private func isBareSupportedFilename(_ url: URL) -> Bool {
         switch url.lastPathComponent.lowercased() {
@@ -208,17 +736,12 @@ public final class MelodyLibrary: @unchecked Sendable {
         return stem.isEmpty ? nil : stem
     }
 
-    private func importAccepted(_ musicXML: String, title: String) -> MelodyImportOutcome {
-        switch gate.evaluate(musicXML) {
-        case .rejected(let reason):
-            return .rejected(reason: reason)
-        case .accepted(let draft):
-            return store(draft: draft, title: uniquifiedTitle(title))
-        }
+    private func sameDirectory(_ lhs: URL, _ rhs: URL) -> Bool {
+        lhs.standardizedFileURL.resolvingSymlinksInPath().path
+            == rhs.standardizedFileURL.resolvingSymlinksInPath().path
     }
 
-    private func uniquifiedTitle(_ base: String) -> String {
-        let taken = Set(manifest.melodies.map(\.title))
+    private static func uniquified(_ base: String, taken: Set<String>) -> String {
         if !taken.contains(base) {
             return base
         }
@@ -229,43 +752,147 @@ public final class MelodyLibrary: @unchecked Sendable {
         return "\(base) \(n)"
     }
 
-    private func store(draft: ImportedMelodyDraft, title: String) -> MelodyImportOutcome {
-        let melody = UserMelody(title: title, measureCount: draft.measureCount)
-        do {
-            try draft.musicXML.write(to: scoreURL(for: melody.id), atomically: true, encoding: .utf8)
-            manifest.melodies.append(melody)
-            if manifest.selectedMelodyID == nil {
-                manifest.selectedMelodyID = melody.id
+    private static func recordOrder(_ lhs: DeviceMelodyRecord, _ rhs: DeviceMelodyRecord) -> Bool {
+        if lhs.importedAt != rhs.importedAt {
+            return lhs.importedAt < rhs.importedAt
+        }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    private static func loadOrCreateDeviceID(in directory: URL, fileManager: FileManager) -> UUID {
+        let url = directory.appendingPathComponent("device-id")
+        if let text = try? String(contentsOf: url, encoding: .utf8),
+           let id = UUID(uuidString: text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return id
+        }
+        let id = UUID()
+        try? Data(id.uuidString.utf8).write(to: url, options: .atomic)
+        return id
+    }
+
+    private static func readSelection(in directory: URL, fileManager: FileManager) -> UUID? {
+        let url = directory.appendingPathComponent("selection.json")
+        guard fileManager.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url),
+              let file = try? JSONDecoder().decode(SelectionFile.self, from: data) else {
+            return nil
+        }
+        return file.selectedMelodyID
+    }
+
+    private static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }
+
+    private static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+
+    private static func merge(
+        _ logs: [(deviceID: UUID, records: [DeviceMelodyRecord])]
+    ) -> [MergedMelody] {
+        struct Seen {
+            var deviceID: UUID
+            var record: DeviceMelodyRecord
+        }
+        var grouped: [UUID: [Seen]] = [:]
+        for (deviceID, records) in logs {
+            for record in records {
+                grouped[record.id, default: []].append(Seen(deviceID: deviceID, record: record))
             }
-            try saveManifest()
-            return .imported(melody, warnings: draft.warnings)
-        } catch {
-            return .rejected(reason: MusicXMLFileLoader.fallbackMessage(
-                """
-                无法保存旋律文件。
-                请检查磁盘空间后重试。
-                """,
-                diagnostic: error.localizedDescription
-            ))
+        }
+        return grouped.map { id, seen in
+            let earliest = seen.min { lhs, rhs in
+                if lhs.record.importedAt != rhs.record.importedAt {
+                    return lhs.record.importedAt < rhs.record.importedAt
+                }
+                return lhs.deviceID.uuidString < rhs.deviceID.uuidString
+            }
+            let titleSource = seen.max { lhs, rhs in
+                if lhs.record.titleChangedAt != rhs.record.titleChangedAt {
+                    return lhs.record.titleChangedAt < rhs.record.titleChangedAt
+                }
+                return lhs.deviceID.uuidString < rhs.deviceID.uuidString
+            }
+            return MergedMelody(
+                id: id,
+                storedTitle: titleSource?.record.title ?? "",
+                measureCount: earliest?.record.measureCount ?? 0,
+                importedAt: earliest?.record.importedAt ?? .distantPast,
+                titleChangedAt: titleSource?.record.titleChangedAt ?? .distantPast,
+                isDeleted: seen.contains { $0.record.deletedAt != nil }
+            )
         }
     }
 
-    private func scoreURL(for id: UUID) -> URL {
-        scoresDirectory.appendingPathComponent("\(id.uuidString).musicxml")
+    private static func displayMelodies(from alive: [MergedMelody]) -> [UserMelody] {
+        let claimOrder = alive.sorted { lhs, rhs in
+            if lhs.titleChangedAt != rhs.titleChangedAt {
+                return lhs.titleChangedAt < rhs.titleChangedAt
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+        var taken = Set<String>()
+        var titles: [UUID: String] = [:]
+        for melody in claimOrder {
+            let title = uniquified(melody.storedTitle, taken: taken)
+            titles[melody.id] = title
+            taken.insert(title)
+        }
+        let displayOrder = alive.sorted { lhs, rhs in
+            if lhs.importedAt != rhs.importedAt {
+                return lhs.importedAt < rhs.importedAt
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+        return displayOrder.map { melody in
+            UserMelody(
+                id: melody.id,
+                title: titles[melody.id] ?? melody.storedTitle,
+                measureCount: melody.measureCount
+            )
+        }
     }
 
-    private func loadManifest() throws -> Manifest {
-        let data = try Data(contentsOf: manifestURL)
-        return try JSONDecoder().decode(Manifest.self, from: data)
+    private struct Snapshot: Equatable {
+        var residence: MelodyLibraryResidence
+        var selection: UUID?
+        var melodies: [UserMelody]
+        var scoreBytes: [UUID: Int]
     }
 
-    private func saveManifest() throws {
-        try fileManager.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
-        let data = try JSONEncoder().encode(manifest)
-        try data.write(to: manifestURL, options: .atomic)
+    private struct DeviceLogFile: Codable {
+        var records: [DeviceMelodyRecord]
     }
 
-    private struct Manifest: Codable {
+    private struct DeviceMelodyRecord: Codable, Equatable {
+        var id: UUID
+        var title: String
+        var measureCount: Int
+        var importedAt: Date
+        var titleChangedAt: Date
+        var deletedAt: Date?
+    }
+
+    private struct MergedMelody {
+        var id: UUID
+        var storedTitle: String
+        var measureCount: Int
+        var importedAt: Date
+        var titleChangedAt: Date
+        var isDeleted: Bool
+    }
+
+    private struct SelectionFile: Codable {
+        var selectedMelodyID: UUID?
+    }
+
+    private struct LegacyManifest: Codable {
         var melodies: [UserMelody]
         var selectedMelodyID: UUID?
     }
