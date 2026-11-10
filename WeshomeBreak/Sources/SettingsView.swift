@@ -431,7 +431,9 @@ private struct SettingsWindowFrameMemory: NSViewRepresentable {
         weak var hostView: NSView?
         var naturalContentHeight: CGFloat = 0
         var lockContentSize: (CGSize) -> Void = { _ in }
-        private var didApply = false
+        private var didLock = false
+        private var didStartAutosave = false
+        private var sizingToken = 0
 
         func schedule() {
             let hostView = hostView
@@ -443,30 +445,57 @@ private struct SettingsWindowFrameMemory: NSViewRepresentable {
 
         private func apply(to window: NSWindow) {
             window.styleMask.insert(.resizable)
-            guard !didApply else { return }
+            guard !didLock else { return }
 
             let name = SettingsWindowMetrics.frameAutosaveName
-            let hadSavedFrame = SettingsWindowMetrics.hasSavedFrame(name)
-            let restored = window.setFrameUsingName(name, force: true)
-            if !restored && (hadSavedFrame || naturalContentHeight <= 1) {
+            if !didStartAutosave, SettingsWindowMetrics.hasSavedFrame(name) {
+                guard window.setFrameUsingName(name, force: true) else { return }
+                // Naming the frame restores again, so clamp after that.
+                window.setFrameAutosaveName(name)
+                didStartAutosave = true
+                didLock = true
+                let contentSize = clampedContentSize(of: window)
+                settle(frame: window.frame, contentSize: contentSize)
                 return
             }
-            didApply = true
-            // Naming the frame also restores a saved one, so clamp or size afterwards.
-            window.setFrameAutosaveName(name)
 
-            let contentSize = restored
-                ? clampedContentSize(of: window)
-                : sizeToNaturalContent(of: window)
-            if !restored {
-                window.saveFrame(usingName: name)
+            guard naturalContentHeight > 1 else { return }
+            // The form can report a short height before the real layout.
+            // Wait until the measurement stops changing, then size once.
+            sizingToken += 1
+            let token = sizingToken
+            Task { @MainActor [weak self, weak window] in
+                try? await Task.sleep(nanoseconds: 80_000_000)
+                guard let self, let window,
+                      token == self.sizingToken, !self.didLock else {
+                    return
+                }
+                self.commitNaturalSize(on: window)
             }
+        }
 
-            let applied = window.frame
-            Task { @MainActor [weak window] in
-                self.lockContentSize(contentSize)
-                guard let window, window.frame.size != applied.size else { return }
-                window.setFrame(applied, display: true, animate: false)
+        private func commitNaturalSize(on window: NSWindow) {
+            didLock = true
+            let name = SettingsWindowMetrics.frameAutosaveName
+            if !didStartAutosave {
+                window.setFrameAutosaveName(name)
+                didStartAutosave = true
+            }
+            let contentSize = sizeToNaturalContent(of: window)
+            window.saveFrame(usingName: name)
+            settle(frame: window.frame, contentSize: contentSize)
+        }
+
+        /// SwiftUI applies the ideal size after the state update. Put the
+        /// whole frame back, including origin, on a later turn of the run loop.
+        private func settle(frame: NSRect, contentSize: CGSize) {
+            let hostView = hostView
+            DispatchQueue.main.async { [weak self] in
+                self?.lockContentSize(contentSize)
+                DispatchQueue.main.async {
+                    guard let window = hostView?.window else { return }
+                    window.setFrame(frame, display: true, animate: false)
+                }
             }
         }
 
