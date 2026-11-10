@@ -32,15 +32,17 @@ struct StaffMelodySceneMode: BreakSceneMode {
 
     @MainActor
     func makeSession() -> BreakSceneSession {
-        let melody = selectionState.beginPresentation(
-            melodies: library.melodies(),
+        let session = StaffMelodySceneSession()
+        session.beginRest(
+            in: library,
             using: melodyStrategy(),
-            continuingSameRest: breakCycle.continuesSameRest
+            continuingSameRest: breakCycle.continuesSameRest,
+            selection: selectionState,
+            scalePercent: settingsStore.staffNotationScalePercent,
+            durationProportionPercent: settingsStore.durationProportionPercent
         )
-        if settingsStore.lastShownMelodyID != selectionState.lastShownMelodyID {
-            settingsStore.lastShownMelodyID = selectionState.lastShownMelodyID
-        }
-        return StaffMelodySceneSession(melodyID: melody?.id)
+        rememberLastShown()
+        return session
     }
 
     @MainActor
@@ -51,44 +53,27 @@ struct StaffMelodySceneMode: BreakSceneMode {
     @MainActor
     func makeView(session: BreakSceneSession) -> AnyView {
         // `BreakOverlayView` calls this once per screen, when its window is
-        // created. The melody was chosen once in `makeSession()`, so every
-        // screen engraves the same User Melody. Scale and Duration Proportion
-        // are read here, so a delay that presents again picks up the current
-        // values while keeping that melody.
+        // created. The melody and Staff Melody Page were chosen once in
+        // `makeSession()`, so every screen shows the same page. A delay
+        // presents again and reads the current scale while keeping that melody.
         guard let staffSession = session as? StaffMelodySceneSession else {
             return AnyView(EmptyView())
         }
-        // Captured here so a mid-break settings change does not resize the
-        // score. Library edits still re-engrave through the store.
-        let scalePercent = settingsStore.staffNotationScalePercent
-        let durationProportionPercent = settingsStore.durationProportionPercent
         return AnyView(StaffMelodySceneView(
             melodyLibraryStore: melodyLibraryStore,
             session: staffSession,
-            library: library,
-            scalePercent: scalePercent,
-            durationProportionPercent: durationProportionPercent,
-            reconcile: { [self] session in
-                reconcileRest(session)
+            onLibraryChanged: { [self] session in
+                session.libraryChanged(in: library)
+                rememberLastShown()
             }
         ))
     }
 
-    /// If the melody chosen for this rest has left the library, draw again
-    /// with the existing held-rest rule. A score file arriving for the same
-    /// melody keeps that choice.
     @MainActor
-    func reconcileRest(_ session: StaffMelodySceneSession) {
-        guard breakCycle.phase == .resting else { return }
-        let melody = selectionState.beginPresentation(
-            melodies: library.melodies(),
-            using: melodyStrategy(),
-            continuingSameRest: true
-        )
+    private func rememberLastShown() {
         if settingsStore.lastShownMelodyID != selectionState.lastShownMelodyID {
             settingsStore.lastShownMelodyID = selectionState.lastShownMelodyID
         }
-        session.melodyID = melody?.id
     }
 
     /// Random only while Scene Mode Selection is fixed to this scene and the
@@ -106,10 +91,7 @@ struct StaffMelodySceneMode: BreakSceneMode {
 struct StaffMelodySceneView: View {
     @ObservedObject var melodyLibraryStore: MelodyLibraryStore
     @ObservedObject var session: StaffMelodySceneSession
-    let library: MelodyLibrary
-    let scalePercent: Int
-    let durationProportionPercent: Int
-    let reconcile: (StaffMelodySceneSession) -> Void
+    let onLibraryChanged: (StaffMelodySceneSession) -> Void
 
     var body: some View {
         ZStack {
@@ -118,7 +100,7 @@ struct StaffMelodySceneView: View {
             if session.showsContent {
                 // Bottom inset keeps the score clear of the skip/delay
                 // control bar; the Melody Preview window has no such bar.
-                StaffMelodyPageContent(page: page)
+                StaffMelodyPageContent(page: session.page)
                     .padding(.horizontal, 40)
                     .padding(.top, 40)
                     .padding(.bottom, 110)
@@ -126,17 +108,8 @@ struct StaffMelodySceneView: View {
         }
         .ignoresSafeArea()
         .onChange(of: melodyLibraryStore.revision) { _, _ in
-            reconcile(session)
+            onLibraryChanged(session)
         }
-    }
-
-    private var page: StaffMelodyPage {
-        StaffMelodyPage.prepare(
-            from: library,
-            melodyID: session.melodyID,
-            scalePercent: scalePercent,
-            durationProportionPercent: durationProportionPercent
-        )
     }
 }
 
