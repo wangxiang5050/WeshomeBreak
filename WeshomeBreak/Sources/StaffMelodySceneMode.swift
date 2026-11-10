@@ -35,13 +35,17 @@ struct StaffMelodySceneMode: BreakSceneMode {
         let session = StaffMelodySceneSession()
         session.beginRest(
             in: library,
-            using: melodyStrategy(),
+            using: MelodySelection.strategy(
+                randomMelodyEnabled: settingsStore.randomMelodyEnabled,
+                sceneModeSelectionRaw: settingsStore.sceneModeSelectionRaw,
+                staffMelodySceneIdentifier: identifier,
+                manualMelodyID: library.selectedMelodyID
+            ),
             continuingSameRest: breakCycle.continuesSameRest,
             selection: selectionState,
             scalePercent: settingsStore.staffNotationScalePercent,
             durationProportionPercent: settingsStore.durationProportionPercent
         )
-        rememberLastShown()
         return session
     }
 
@@ -64,27 +68,8 @@ struct StaffMelodySceneMode: BreakSceneMode {
             session: staffSession,
             onLibraryChanged: { [self] session in
                 session.libraryChanged(in: library)
-                rememberLastShown()
             }
         ))
-    }
-
-    @MainActor
-    private func rememberLastShown() {
-        if settingsStore.lastShownMelodyID != selectionState.lastShownMelodyID {
-            settingsStore.lastShownMelodyID = selectionState.lastShownMelodyID
-        }
-    }
-
-    /// Random only while Scene Mode Selection is fixed to this scene and the
-    /// user has turned 「随机旋律」 on. Otherwise the manual current melody.
-    @MainActor
-    private func melodyStrategy() -> MelodySelectionStrategy {
-        let fixedToStaffMelody = settingsStore.sceneModeSelectionRaw == identifier
-        if settingsStore.randomMelodyEnabled && fixedToStaffMelody {
-            return .randomNoRepeat
-        }
-        return .manual(melodyID: library.selectedMelodyID)
     }
 }
 

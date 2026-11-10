@@ -9,6 +9,81 @@ struct MelodySelectionTests {
     private let beta = UserMelody(id: UUID(uuidString: "00000000-0000-0000-0000-00000000000B")!, title: "B", measureCount: 4)
     private let gamma = UserMelody(id: UUID(uuidString: "00000000-0000-0000-0000-00000000000C")!, title: "C", measureCount: 4)
 
+    @Test("random melody draws when the rest is fixed to staff melody")
+    func randomMelodyDrawsWhenSceneIsFixedToStaffMelody() {
+        let strategy = MelodySelection.strategy(
+            randomMelodyEnabled: true,
+            sceneModeSelectionRaw: "staff-melody",
+            staffMelodySceneIdentifier: "staff-melody",
+            manualMelodyID: alpha.id
+        )
+
+        #expect(strategy == .randomNoRepeat)
+    }
+
+    @Test("random melody keeps the manual pin while scene mode is not staff melody")
+    func randomMelodyKeepsThePinWhenSceneIsNotStaffMelody() {
+        let strategy = MelodySelection.strategy(
+            randomMelodyEnabled: true,
+            sceneModeSelectionRaw: "random",
+            staffMelodySceneIdentifier: "staff-melody",
+            manualMelodyID: alpha.id
+        )
+
+        #expect(strategy == .manual(melodyID: alpha.id))
+    }
+
+    @Test("turning random melody off keeps the manual pin on a staff melody rest")
+    func randomMelodyOffKeepsThePinOnAStaffMelodyRest() {
+        let strategy = MelodySelection.strategy(
+            randomMelodyEnabled: false,
+            sceneModeSelectionRaw: "staff-melody",
+            staffMelodySceneIdentifier: "staff-melody",
+            manualMelodyID: alpha.id
+        )
+
+        #expect(strategy == .manual(melodyID: alpha.id))
+    }
+
+    @Test("the next launch keeps the melody shown on this rest")
+    func nextLaunchKeepsTheMelodyShownOnThisRest() {
+        let suite = "melody-selection-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let state = MelodySelectionState(defaults: defaults, randomIndex: { _ in 1 })
+        _ = state.beginPresentation(
+            melodies: [alpha, beta, gamma],
+            using: .randomNoRepeat,
+            continuingSameRest: false
+        )
+
+        let relaunched = MelodySelectionState(defaults: defaults, randomIndex: { _ in 0 })
+        #expect(relaunched.lastShownMelodyID == beta.id)
+    }
+
+    @Test("an empty rest does not erase the melody stored for the next launch")
+    func emptyRestDoesNotEraseTheStoredMelody() {
+        let suite = "melody-selection-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let state = MelodySelectionState(defaults: defaults, randomIndex: { _ in 0 })
+        _ = state.beginPresentation(
+            melodies: [alpha],
+            using: .manual(melodyID: alpha.id),
+            continuingSameRest: false
+        )
+        _ = state.beginPresentation(
+            melodies: [],
+            using: .randomNoRepeat,
+            continuingSameRest: false
+        )
+
+        let relaunched = MelodySelectionState(defaults: defaults)
+        #expect(relaunched.lastShownMelodyID == alpha.id)
+    }
+
     @Test("a new random rest picks the indexed melody and records it as last shown")
     func randomRestRecordsTheIndexedMelody() {
         let state = MelodySelectionState(randomIndex: { _ in 1 })
@@ -123,6 +198,20 @@ struct MelodySelectionTests {
         let melody = state.beginPresentation(
             melodies: [alpha, beta],
             using: .manual(melodyID: nil),
+            continuingSameRest: false
+        )
+
+        #expect(melody == nil)
+        #expect(state.lastShownMelodyID == alpha.id)
+    }
+
+    @Test("a manual rest whose pin is not in the library shows nothing")
+    func manualRestWithUnknownPinShowsNothing() {
+        let state = MelodySelectionState(lastShownMelodyID: alpha.id, randomIndex: { _ in 0 })
+
+        let melody = state.beginPresentation(
+            melodies: [alpha, beta],
+            using: .manual(melodyID: UUID(uuidString: "00000000-0000-0000-0000-000000000099")!),
             continuingSameRest: false
         )
 

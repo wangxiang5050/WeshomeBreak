@@ -14,7 +14,8 @@ struct WeshomeBreakApp: App {
     private let availableSceneModes: [BreakSceneMode]
 
     init() {
-        let settingsStore = BreakSettingsStore()
+        let defaults = UserDefaults.standard
+        let settingsStore = BreakSettingsStore(defaults: defaults)
         let melodyLibrary = MelodyLibrary(
             sharedDirectory: AppPaths.sharedMelodyLibraryDirectory,
             privateDirectory: AppPaths.privateMelodyLibraryRoot,
@@ -32,9 +33,7 @@ struct WeshomeBreakApp: App {
                 melodyLibraryStore: melodyLibraryStore,
                 settingsStore: settingsStore,
                 breakCycle: breakCycle,
-                selectionState: MelodySelectionState(
-                    lastShownMelodyID: settingsStore.lastShownMelodyID
-                )
+                selectionState: MelodySelectionState(defaults: defaults)
             )
         ]
 

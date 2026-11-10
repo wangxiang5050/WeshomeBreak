@@ -211,10 +211,17 @@ struct SettingsView: View {
     /// rest still uses the manual current melody until it is.
     private var randomMelodyNote: String? {
         guard settingsStore.randomMelodyEnabled else { return nil }
-        if settingsStore.sceneModeSelectionRaw == StaffMelodySceneSession.sceneModeIdentifier {
+        switch MelodySelection.strategy(
+            randomMelodyEnabled: true,
+            sceneModeSelectionRaw: settingsStore.sceneModeSelectionRaw,
+            staffMelodySceneIdentifier: StaffMelodySceneSession.sceneModeIdentifier,
+            manualMelodyID: nil
+        ) {
+        case .randomNoRepeat:
             return "此开关生效时，下次休息不按「当前」勾选，而从曲库随机抽取。"
+        case .manual:
+            return "仅当选择策略为「五线谱旋律」时，休息才会随机；现在仍用当前旋律。"
         }
-        return "仅当选择策略为「五线谱旋律」时，休息才会随机；现在仍用当前旋律。"
     }
 
     private func melodyRow(_ melody: UserMelody) -> some View {

@@ -133,29 +133,6 @@ struct MelodyLibraryTests {
         #expect(warnings.contains { $0.contains("8") })
     }
 
-    @Test("MelodySelectionStrategy.manual resolves by id")
-    func selectionStrategyManualResolves() throws {
-        let (library, root) = try makeLibrary()
-        defer { cleanup(root) }
-
-        guard case .imported(let melody, _) = library.importMusicXML(MusicXMLFixtures.twoMeasures) else {
-            Issue.record("import failed")
-            return
-        }
-
-        let resolved = MelodySelection.resolve(
-            melodies: library.melodies(),
-            melodyID: melody.id
-        )
-        #expect(resolved?.id == melody.id)
-
-        let missing = MelodySelection.resolve(
-            melodies: library.melodies(),
-            melodyID: UUID()
-        )
-        #expect(missing == nil)
-    }
-
     @Test("importing a .musicxml file URL succeeds")
     func importMusicXMLFileURL() throws {
         let (library, root) = try makeLibrary()
