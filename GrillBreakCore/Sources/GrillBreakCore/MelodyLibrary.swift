@@ -80,6 +80,9 @@ public final class MelodyLibrary: @unchecked Sendable {
     private var ourRecords: [UUID: DeviceMelodyRecord] = [:]
     private var displayMelodies: [UserMelody] = []
     private var tombstonedIDs: Set<UUID> = []
+    /// This Mac's device log exists but could not be read (still downloading, or mid-write).
+    /// Saves are refused so a later download is not replaced with an empty log.
+    private var ourLogUnreadable = false
 
     /// Private library at `rootDirectory`, including its manual selection.
     /// Used when this Mac cannot reach the shared library.
@@ -311,7 +314,9 @@ public final class MelodyLibrary: @unchecked Sendable {
 
     private func foldPrivateLibraryIntoShared() {
         guard !sameDirectory(privateDirectory, sharedDirectory) else { return }
+        guard !ourLogUnreadable else { return }
         guard privateLogsAreReadable() else { return }
+        guard !readDeviceLogs(in: sharedDirectory).incomplete else { return }
         let contribution = privateContribution()
         guard contribution.hasCatalog else { return }
 
@@ -429,13 +434,17 @@ public final class MelodyLibrary: @unchecked Sendable {
     }
 
     private func loadOurRecords(from directory: URL) {
-        let url = deviceLogURL(in: directory)
-        guard let data = try? Data(contentsOf: url),
-              let file = try? Self.makeDecoder().decode(DeviceLogFile.self, from: data) else {
+        switch readDeviceLogFile(at: deviceLogURL(in: directory)) {
+        case .absent:
+            ourLogUnreadable = false
             ourRecords = [:]
-            return
+        case .unreadable:
+            ourLogUnreadable = true
+            ourRecords = [:]
+        case .loaded(let file):
+            ourLogUnreadable = false
+            ourRecords = Dictionary(uniqueKeysWithValues: file.records.map { ($0.id, $0) })
         }
-        ourRecords = Dictionary(uniqueKeysWithValues: file.records.map { ($0.id, $0) })
     }
 
     private func rebuildMerged() {
@@ -535,6 +544,9 @@ public final class MelodyLibrary: @unchecked Sendable {
     }
 
     private func saveOurLog(_ records: [UUID: DeviceMelodyRecord]) throws {
+        if ourLogUnreadable {
+            throw MelodyLibraryError.ioFailure("曲库还在从 iCloud 下载，请稍候再试。")
+        }
         ensureLibraryDirectories(activeDirectory)
         let payload = DeviceLogFile(records: records.values.sorted(by: Self.recordOrder))
         let data = try Self.makeEncoder().encode(payload)
@@ -550,11 +562,14 @@ public final class MelodyLibrary: @unchecked Sendable {
     }
 
     private func requestDownloadIfUbiquitous(_ url: URL) {
-        let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey])
-        let placeholder = URL(fileURLWithPath: url.path + ".icloud")
-        guard values?.isUbiquitousItem == true || fileManager.fileExists(atPath: placeholder.path) else {
-            return
-        }
+        let values = try? url.resourceValues(forKeys: [
+            .isUbiquitousItemKey,
+            .ubiquitousItemDownloadingStatusKey
+        ])
+        let placeholder = Self.ubiquityPlaceholder(for: url)
+        let notHere = values?.ubiquitousItemDownloadingStatus == .notDownloaded
+            || fileManager.fileExists(atPath: placeholder.path)
+        guard values?.isUbiquitousItem == true || notHere else { return }
         try? fileManager.startDownloadingUbiquitousItem(at: url)
     }
 
@@ -689,21 +704,78 @@ public final class MelodyLibrary: @unchecked Sendable {
     }
 
     private func readAllDeviceLogs(in directory: URL) -> [(deviceID: UUID, records: [DeviceMelodyRecord])] {
+        readDeviceLogs(in: directory).logs
+    }
+
+    /// `incomplete` means a device log is still downloading or could not be decoded.
+    /// Callers must not treat that as an empty log.
+    private func readDeviceLogs(
+        in directory: URL
+    ) -> (logs: [(deviceID: UUID, records: [DeviceMelodyRecord])], incomplete: Bool) {
         let directory = directory.appendingPathComponent("devices", isDirectory: true)
         guard let urls = try? fileManager.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: nil
-        ) else { return [] }
+        ) else { return ([], false) }
         var logs: [(deviceID: UUID, records: [DeviceMelodyRecord])] = []
-        for url in urls where url.pathExtension == "json" {
-            guard let deviceID = UUID(uuidString: url.deletingPathExtension().lastPathComponent),
-                  let data = try? Data(contentsOf: url),
-                  let file = try? Self.makeDecoder().decode(DeviceLogFile.self, from: data) else {
+        var incomplete = false
+        for url in urls {
+            if let item = Self.itemURL(forUbiquityPlaceholder: url) {
+                try? fileManager.startDownloadingUbiquitousItem(at: item)
+                incomplete = true
                 continue
             }
-            logs.append((deviceID, file.records))
+            guard url.pathExtension == "json",
+                  let deviceID = UUID(uuidString: url.deletingPathExtension().lastPathComponent) else {
+                continue
+            }
+            switch readDeviceLogFile(at: url) {
+            case .absent:
+                break
+            case .unreadable:
+                incomplete = true
+            case .loaded(let file):
+                logs.append((deviceID, file.records))
+            }
         }
-        return logs
+        return (logs, incomplete)
+    }
+
+    private enum DeviceLogRead {
+        case absent
+        case unreadable
+        case loaded(DeviceLogFile)
+    }
+
+    private func readDeviceLogFile(at url: URL) -> DeviceLogRead {
+        let placeholder = Self.ubiquityPlaceholder(for: url)
+        let values = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
+        if fileManager.fileExists(atPath: placeholder.path)
+            || values?.ubiquitousItemDownloadingStatus == .notDownloaded {
+            try? fileManager.startDownloadingUbiquitousItem(at: url)
+            return .unreadable
+        }
+        guard fileManager.fileExists(atPath: url.path) else { return .absent }
+        guard let data = try? Data(contentsOf: url),
+              let file = try? Self.makeDecoder().decode(DeviceLogFile.self, from: data) else {
+            return .unreadable
+        }
+        return .loaded(file)
+    }
+
+    /// iCloud Drive stores an evicted file as `.<name>.icloud` beside the real name.
+    private static func ubiquityPlaceholder(for item: URL) -> URL {
+        item.deletingLastPathComponent()
+            .appendingPathComponent("." + item.lastPathComponent + ".icloud")
+    }
+
+    private static func itemURL(forUbiquityPlaceholder placeholder: URL) -> URL? {
+        let name = placeholder.lastPathComponent
+        let suffix = ".icloud"
+        guard name.hasPrefix("."), name.hasSuffix(suffix) else { return nil }
+        let inner = name.dropFirst().dropLast(suffix.count)
+        guard !inner.isEmpty else { return nil }
+        return placeholder.deletingLastPathComponent().appendingPathComponent(String(inner))
     }
 
     private func readLegacyManifest(at url: URL) -> LegacyManifest? {

@@ -263,4 +263,49 @@ struct MelodyLibrarySyncTests {
         #expect(libraryB.selectedMelodyID == nil)
         #expect(try libraryB.musicXML(for: melodyID) == MusicXMLFixtures.twoMeasures)
     }
+
+    @Test("an unreadable shared device log is not replaced when the private library folds")
+    func unreadableSharedLogIsNotReplaced() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("melody-unreadable-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let shared = root.appendingPathComponent("shared", isDirectory: true)
+        let privateDir = root.appendingPathComponent("private", isDirectory: true)
+        let local = root.appendingPathComponent("local", isDirectory: true)
+        let reachability = Reachability(true)
+        let clock = Clock(Date(timeIntervalSince1970: 1_700_000_000))
+        let library = MelodyLibrary(
+            sharedDirectory: shared,
+            privateDirectory: privateDir,
+            localStateDirectory: local,
+            sharedContainerIsReachable: { reachability.value },
+            now: { clock.now() }
+        )
+        guard case .imported = library.importMusicXML(MusicXMLFixtures.simpleFourMeasures) else {
+            Issue.record("import failed")
+            return
+        }
+
+        let deviceID = try String(contentsOf: local.appendingPathComponent("device-id"), encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let logURL = shared.appendingPathComponent("devices/\(deviceID).json")
+        try Data("not json".utf8).write(to: logURL)
+
+        reachability.value = false
+        library.reload()
+        guard case .imported = library.importMusicXML(MusicXMLFixtures.twoMeasures) else {
+            Issue.record("private import failed")
+            return
+        }
+
+        reachability.value = true
+        library.reload()
+
+        let after = try String(contentsOf: logURL, encoding: .utf8)
+        #expect(after == "not json")
+        #expect(FileManager.default.fileExists(
+            atPath: privateDir.appendingPathComponent("devices").path
+        ))
+    }
 }
