@@ -1,3 +1,4 @@
+import AppKit
 import GrillBreakCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -21,6 +22,11 @@ struct SettingsView: View {
     @State private var editingTitles: [UUID: String] = [:]
     @State private var titleBaselines: [UUID: String] = [:]
     @FocusState private var focusedMelodyID: UUID?
+    /// Form height at its natural size. Zero until the first layout.
+    @State private var naturalContentHeight: CGFloat = 0
+    /// Chosen once: the saved frame, or the natural size on the first open.
+    /// Later content growth does not change it, so the remembered frame stays put.
+    @State private var lockedContentSize: CGSize?
 
     private static let durationRange: ClosedRange<Double> = 1...120
     private static let delayRange: ClosedRange<Double> = 1...60
@@ -32,6 +38,45 @@ struct SettingsView: View {
     ].compactMap { $0 }
 
     var body: some View {
+        ScrollView(.vertical) {
+            settingsForm
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: NaturalContentHeightKey.self,
+                            value: proxy.size.height
+                        )
+                    }
+                }
+        }
+        .defaultScrollAnchor(.top)
+        .frame(
+            minWidth: SettingsWindowMetrics.minWidth,
+            idealWidth: lockedContentSize?.width ?? SettingsWindowMetrics.minWidth,
+            maxWidth: .infinity,
+            minHeight: SettingsWindowMetrics.minHeight,
+            idealHeight: lockedContentSize?.height ?? SettingsWindowMetrics.minHeight,
+            maxHeight: .infinity,
+            alignment: .top
+        )
+        .onPreferenceChange(NaturalContentHeightKey.self) { height in
+            guard lockedContentSize == nil,
+                  height > 1,
+                  abs(height - naturalContentHeight) > 0.5 else {
+                return
+            }
+            naturalContentHeight = height
+        }
+        .background {
+            SettingsWindowFrameMemory(naturalContentHeight: naturalContentHeight) { size in
+                if lockedContentSize == nil {
+                    lockedContentSize = size
+                }
+            }
+        }
+    }
+
+    private var settingsForm: some View {
         Form {
             Section("启动") {
                 Toggle("登录时启动", isOn: $settingsStore.launchAtLogin)
@@ -132,8 +177,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .fileImporter(
             isPresented: $isImporting,
             allowedContentTypes: Self.musicXMLTypes,
@@ -172,9 +217,6 @@ struct SettingsView: View {
         return "仅当选择策略为「五线谱旋律」时，休息才会随机；现在仍用当前旋律。"
     }
 
-    /// Caps the title so long names don't shove the trailing controls.
-    private static let melodyTitleColumnWidth: CGFloat = 128
-
     private func melodyRow(_ melody: UserMelody) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Button {
@@ -198,9 +240,11 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .frame(width: Self.melodyTitleColumnWidth, alignment: .leading)
-
-            Spacer(minLength: 8)
+            .frame(
+                minWidth: SettingsWindowMetrics.titleColumnMinWidth,
+                maxWidth: .infinity,
+                alignment: .leading
+            )
 
             if melodyLibraryStore.selectedMelodyID == melody.id {
                 Text("当前")
@@ -337,5 +381,123 @@ struct SettingsView: View {
             get: { settingsStore[keyPath: keyPath] / 60 },
             set: { settingsStore[keyPath: keyPath] = $0 * 60 }
         )
+    }
+}
+
+/// Content size of the Settings window. The minimum still fits one row of
+/// controls and a slice of the form; there is no maximum other than the screen.
+fileprivate enum SettingsWindowMetrics {
+    static let minWidth: CGFloat = 420
+    static let minHeight: CGFloat = 360
+    static let titleColumnMinWidth: CGFloat = 128
+    static let frameAutosaveName: NSWindow.FrameAutosaveName = "WeshomeBreak.Settings"
+
+    static func hasSavedFrame(_ name: NSWindow.FrameAutosaveName) -> Bool {
+        UserDefaults.standard.object(forKey: "NSWindow Frame \(name)") != nil
+    }
+}
+
+private struct NaturalContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// Restores the Settings window's frame, or sizes it to the form the first time.
+/// AppKit stores the frame for this agent app; SwiftUI scene restoration does not.
+private struct SettingsWindowFrameMemory: NSViewRepresentable {
+    var naturalContentHeight: CGFloat
+    var lockContentSize: (CGSize) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.hostView = view
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.hostView = nsView
+        context.coordinator.naturalContentHeight = naturalContentHeight
+        context.coordinator.lockContentSize = lockContentSize
+        context.coordinator.schedule()
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        weak var hostView: NSView?
+        var naturalContentHeight: CGFloat = 0
+        var lockContentSize: (CGSize) -> Void = { _ in }
+        private var didApply = false
+
+        func schedule() {
+            let hostView = hostView
+            Task { @MainActor [weak self] in
+                guard let self, let window = hostView?.window else { return }
+                self.apply(to: window)
+            }
+        }
+
+        private func apply(to window: NSWindow) {
+            window.styleMask.insert(.resizable)
+            guard !didApply else { return }
+
+            let name = SettingsWindowMetrics.frameAutosaveName
+            let hadSavedFrame = SettingsWindowMetrics.hasSavedFrame(name)
+            let restored = window.setFrameUsingName(name, force: true)
+            if !restored && (hadSavedFrame || naturalContentHeight <= 1) {
+                return
+            }
+            didApply = true
+            // Naming the frame also restores a saved one, so clamp or size afterwards.
+            window.setFrameAutosaveName(name)
+
+            let contentSize = restored
+                ? clampedContentSize(of: window)
+                : sizeToNaturalContent(of: window)
+            if !restored {
+                window.saveFrame(usingName: name)
+            }
+
+            let applied = window.frame
+            Task { @MainActor [weak window] in
+                self.lockContentSize(contentSize)
+                guard let window, window.frame.size != applied.size else { return }
+                window.setFrame(applied, display: true, animate: false)
+            }
+        }
+
+        /// Grows a restored frame up to the minimum. Keeps the top edge put.
+        private func clampedContentSize(of window: NSWindow) -> CGSize {
+            let content = window.contentRect(forFrameRect: window.frame)
+            let width = max(SettingsWindowMetrics.minWidth, content.width)
+            let height = max(SettingsWindowMetrics.minHeight, content.height)
+            guard width != content.width || height != content.height else {
+                return CGSize(width: width, height: height)
+            }
+            place(contentSize: CGSize(width: width, height: height), on: window)
+            return CGSize(width: width, height: height)
+        }
+
+        private func sizeToNaturalContent(of window: NSWindow) -> CGSize {
+            let size = CGSize(
+                width: SettingsWindowMetrics.minWidth,
+                height: max(SettingsWindowMetrics.minHeight, naturalContentHeight)
+            )
+            place(contentSize: size, on: window)
+            return size
+        }
+
+        private func place(contentSize: CGSize, on window: NSWindow) {
+            let contentRect = NSRect(origin: .zero, size: contentSize)
+            let target = window.frameRect(forContentRect: contentRect)
+            var frame = window.frame
+            frame.origin.y += frame.height - target.height
+            frame.size = target.size
+            window.setFrame(frame, display: true, animate: false)
+        }
     }
 }

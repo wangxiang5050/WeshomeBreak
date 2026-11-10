@@ -76,7 +76,9 @@ struct WeshomeBreakApp: App {
                 availableSceneModes: availableSceneModes
             )
         }
-        .windowResizability(.contentSize)
+        // Resizable between the form's minimum and the screen. `.contentSize`
+        // locked Settings to the form's ideal size, so the edges could not be dragged.
+        .windowResizability(.automatic)
 
         // Independent of the settings window's lifecycle: closing Settings
         // does not close an open Melody Preview, and vice versa.
