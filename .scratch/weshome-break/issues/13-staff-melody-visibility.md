@@ -17,4 +17,4 @@ During a Staff Melody Scene break, let the user temporarily hide or show the sce
 
 ## Domain
 
-See `CONTEXT.md` → **Staff Melody Visibility**.
+See `GLOSSARY.md` → **Staff Melody Visibility**.

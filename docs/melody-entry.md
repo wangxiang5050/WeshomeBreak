@@ -32,4 +32,4 @@ App 会提示**原因**和**建议**。门禁拒绝（如多 Part）按提示改
 | 无法读取文件 | 确认文件未损坏、编码正常；改用 MuseScore 导出 `.musicxml`。界面可能附带一行「详情」。 |
 | 不支持的扩展名 | 只接受 `.musicxml` / `.mxl`（及 `.xml`）；先从 MuseScore / Audiveris 导出正确格式。 |
 
-格式与镌刻决策见 `docs/adr/0001-musicxml-verovio-for-staff-melody.md`；术语见根目录 `CONTEXT.md`。
+格式与镌刻决策见 `docs/adr/0001-musicxml-verovio-for-staff-melody.md`；术语见根目录 `GLOSSARY.md`。

@@ -64,7 +64,7 @@ swift test
 | 文档 | 说明 |
 |------|------|
 | [`spec.md`](spec.md) | 产品规格与实现决策 |
-| [`CONTEXT.md`](CONTEXT.md) | 领域术语（Staff Melody、MusicXML 等） |
+| [`GLOSSARY.md`](GLOSSARY.md) | 领域术语（Staff Melody、MusicXML 等） |
 | [`docs/melody-entry.md`](docs/melody-entry.md) | 旋律外置录入路径 |
 | [`docs/adr/0001-musicxml-verovio-for-staff-melody.md`](docs/adr/0001-musicxml-verovio-for-staff-melody.md) | MusicXML + Verovio 决策 |
 

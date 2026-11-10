@@ -6,7 +6,7 @@
 
 **Status:** done
 
-**参考:** `CONTEXT.md`；`docs/adr/0001-musicxml-verovio-for-staff-melody.md`
+**参考:** `GLOSSARY.md`；`docs/adr/0001-musicxml-verovio-for-staff-melody.md`
 
 - [x] 实现 Staff Melody Scene 并注册到模式注册表:用 Verovio 将当前选中的 User Melody（MusicXML）镌刻为 SVG，在遮罩中央展示
 - [x] Melody Library 为空时:遮罩显示可行动空态（提示去设置导入）,倒计时照常

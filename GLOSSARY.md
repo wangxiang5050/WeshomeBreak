@@ -84,9 +84,13 @@ _Avoid_: Verovio scale, zoom
 How closely horizontal space follows note duration (as a percent, 5–100; default 60) when turning a Melody Selection into a Staff Melody Page. Configured in Settings under Melody Library as 时值比例. Maps to Verovio `spacingNonLinear` (value ÷ 100): nearer 100% spaces notes in proportion to duration; lower values pack short notes tighter. Same effect timing as Staff Notation Scale.
 _Avoid_: even note spacing, equal bar width, notehead size, Spacing Coefficient, 疏密系数
 
+**Settings**:
+The owner's configuration surface: launch, work/rest durations, skip and delay, Scene Mode Selection, and the Melody Library (including Staff Notation Scale and Duration Proportion). Not Melody Preview, and not the Rest Overlay. Its size is not Staff Notation Scale.
+_Avoid_: 界面, preferences (when that means Melody Preview)
+
 **Melody Preview**:
-An independent Settings window that engraves the manual current melody at the current Staff Notation Scale and Duration Proportion, so the user can judge those settings without waiting for a break. Tracks that pin and those settings live, and does not follow a random rest draw. Empty/failed states reuse the same copy as the Staff Melody Scene.
-_Avoid_: score preview (ambiguous with a future multi-melody browser), thumbnail
+A separate window opened from Settings that engraves the manual current melody at the current Staff Notation Scale and Duration Proportion, so the user can judge those settings without waiting for a break. Closing Settings does not close it. Tracks that pin and those settings live, and does not follow a random rest draw. Empty/failed states reuse the same copy as the Staff Melody Scene.
+_Avoid_: score preview (ambiguous with a future multi-melody browser), thumbnail, Settings
 
 ## Distribution
 

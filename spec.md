@@ -58,7 +58,7 @@
 **休息遮罩与展示模式**
 - 休息触发时,在所有当前连接的屏幕上各创建一个全屏遮罩窗口,窗口层级需高于常规应用(用于强制置顶盖住 Dock 与菜单栏),遮罩内容使用 SwiftUI View 承载,窗口本身用 AppKit(`NSWindow`)管理以精确控制多屏覆盖与层级行为。
 - 展示模式通过统一协议(`BreakSceneMode` 或等价命名)定义,每种模式提供自己的 SwiftUI 视图与展示所需的元信息;新增模式只需实现该协议并注册,无需修改遮罩窗口或调度器的调用逻辑。
-- 当前实现一种展示模式——**Staff Melody Scene**(详见 `CONTEXT.md` 与 `docs/adr/0001-musicxml-verovio-for-staff-melody.md`):
+- 当前实现一种展示模式——**Staff Melody Scene**(详见 `GLOSSARY.md` 与 `docs/adr/0001-musicxml-verovio-for-staff-melody.md`):
   - 展示用户导入的 User Melody:可读、正确的单声部谱,供休息时哼唱;纯视觉,不发声。
   - 存储格式为 MusicXML(`.musicxml` / `.mxl`);渲染使用 Verovio 镌刻为 SVG。
   - 外置录入:Audiveris(识图→MusicXML)与/或 MuseScore(校对/手录/导出),再导入 App。
@@ -122,5 +122,5 @@
 
 - 本 spec 由 `grill-me` 交互式访谈(grilling 会话)整理而成,访谈过程逐轮确认了产品形态、调度模型、遮罩交互、视觉细节、工程结构与分发方式等决策,详见对话历史。
 - 项目当前未配置任何外部 issue tracker(未检测到 GitHub/Linear 等集成,也没有 `setup-matt-pocock-skills` 的相关配置),因此本 spec 以本地 `spec.md` 文件形式产出,未发布到外部 issue tracker。若后续接入了 issue tracker,可将本文件内容直接迁移过去并补充 triage 标签。
-- Staff Melody 相关术语与决策见根目录 `CONTEXT.md`、`docs/adr/0001-musicxml-verovio-for-staff-melody.md`、外置录入说明 `docs/melody-entry.md`；相关 tickets: 06（展示模式协议）、11（MusicXML 门禁 + 旋律库模型）、12（Staff Melody Scene）、07（设置含旋律库 UI）。
+- Staff Melody 相关术语与决策见根目录 `GLOSSARY.md`、`docs/adr/0001-musicxml-verovio-for-staff-melody.md`、外置录入说明 `docs/melody-entry.md`；相关 tickets: 06（展示模式协议）、11（MusicXML 门禁 + 旋律库模型）、12（Staff Melody Scene）、07（设置含旋律库 UI）。
 - 后续实现阶段建议先搭建 `GrillBreakCore` 包与调度器骨架并配好单元测试,再逐步接入 SwiftUI/AppKit 的菜单栏与遮罩窗口 UI,最后实现 Staff Melody Scene(MusicXML 门禁 + Verovio 展示 + 设置中的旋律库)。

@@ -64,7 +64,7 @@ External melody-entry steps: [`docs/melody-entry.md`](docs/melody-entry.md).
 | Doc | Description |
 |-----|-------------|
 | [`spec.md`](spec.md) | Product spec and implementation decisions |
-| [`CONTEXT.md`](CONTEXT.md) | Domain glossary (Staff Melody, MusicXML, etc.) |
+| [`GLOSSARY.md`](GLOSSARY.md) | Domain glossary (Staff Melody, MusicXML, etc.) |
 | [`docs/melody-entry.md`](docs/melody-entry.md) | Offline melody entry path |
 | [`docs/adr/0001-musicxml-verovio-for-staff-melody.md`](docs/adr/0001-musicxml-verovio-for-staff-melody.md) | MusicXML + Verovio decision |
 

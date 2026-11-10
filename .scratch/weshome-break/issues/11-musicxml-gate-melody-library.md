@@ -6,7 +6,7 @@
 
 **Status:** done
 
-**参考:** `CONTEXT.md`；`docs/adr/0001-musicxml-verovio-for-staff-melody.md`；`docs/melody-entry.md`
+**参考:** `GLOSSARY.md`；`docs/adr/0001-musicxml-verovio-for-staff-melody.md`；`docs/melody-entry.md`
 
 - [x] MusicXML 导入门禁（整份拒绝并说明原因，不静默丢元素）:
   - 仅单 Part、单 Voice

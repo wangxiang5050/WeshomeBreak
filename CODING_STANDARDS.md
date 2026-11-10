@@ -1,6 +1,6 @@
 # Coding standards
 
-`/code-review` Standards axis: apply **every** architecture rule below to the diff. Vocabulary is **module**, **interface**, **depth**, **seam**, **adapter** (same meanings as the codebase-design skill). Domain names live in `CONTEXT.md`.
+`/code-review` Standards axis: apply **every** architecture rule below to the diff. Vocabulary is **module**, **interface**, **depth**, **seam**, **adapter** (same meanings as the codebase-design skill). Domain names live in `GLOSSARY.md`.
 
 A documented rule here overrides the Fowler smell baseline.
 
