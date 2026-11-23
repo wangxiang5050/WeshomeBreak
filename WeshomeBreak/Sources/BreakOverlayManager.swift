@@ -40,12 +40,19 @@ final class BreakOverlayManager: RestOverlayWindows {
 
         let session = sceneMode.makeSession()
         sceneSession = session
+        session.notePianoLoading()
         watchPlayback(of: session)
         startPlaybackClock()
+        piano.prepare { [weak session] ready in
+            session?.notePianoReady(ready)
+        }
         windows = NSScreen.screens.map { screen in
             makeWindow(for: screen, sceneMode: sceneMode, sceneSession: session)
         }
         windows.forEach { $0.makeKeyAndOrderFront(nil) }
+        if RestOverlayWitness.isEnabled, session.hoverBarSymbolName != nil {
+            session.performHoverBarSymbol()
+        }
     }
 
     /// Closes and releases every overlay window currently shown.
@@ -83,7 +90,9 @@ final class BreakOverlayManager: RestOverlayWindows {
             lastOutput = output
             sceneSession?.notePlaybackOutput(output)
         }
-        sceneSession?.tickPlayback(seconds: 1.0 / 30)
+        if let seconds = piano.musicalSeconds(now: Date().timeIntervalSinceReferenceDate) {
+            sceneSession?.placePlayback(at: seconds)
+        }
     }
 
     private func makeWindow(

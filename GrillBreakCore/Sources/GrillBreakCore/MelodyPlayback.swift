@@ -32,20 +32,50 @@ public enum PlaybackOutput: Sendable, Equatable {
 
 public enum MelodyPlaybackPhase: Sendable, Equatable {
     case idle
+    case preparing
     case playing
     case paused
     case finished
 }
 
-public struct PlaybackAttack: Sendable, Equatable {
+/// One already-decided note. Times are seconds from the start of this sequence.
+public struct PlaybackNote: Sendable, Equatable {
     public var midi: Int
     public var velocity: Int
+    public var startSeconds: TimeInterval
     public var soundingSeconds: TimeInterval
 
-    public init(midi: Int, velocity: Int, soundingSeconds: TimeInterval) {
+    public init(midi: Int, velocity: Int, startSeconds: TimeInterval, soundingSeconds: TimeInterval) {
         self.midi = midi
         self.velocity = velocity
+        self.startSeconds = startSeconds
         self.soundingSeconds = soundingSeconds
+    }
+}
+
+/// The notes to install, and how long the sequence runs so trailing rests still move the line.
+public struct PlaybackSequence: Sendable, Equatable {
+    public var notes: [PlaybackNote]
+    public var seconds: TimeInterval
+
+    public init(notes: [PlaybackNote], seconds: TimeInterval) {
+        self.notes = notes
+        self.seconds = seconds
+    }
+}
+
+/// Heard position between sequencer samples. `maximumLead` is one display frame.
+public enum PlayheadTiming {
+    public static func heardSeconds(
+        sampled: TimeInterval,
+        sampledAt: TimeInterval,
+        now: TimeInterval,
+        latency: TimeInterval,
+        maximumLead: TimeInterval
+    ) -> TimeInterval {
+        let elapsed = max(0, now - sampledAt)
+        let lead = min(max(0, maximumLead), elapsed)
+        return max(0, sampled + lead - max(0, latency))
     }
 }
 
@@ -64,20 +94,21 @@ public struct PlaybackLine: Sendable, Equatable {
 public struct MelodyPlaybackMoment: Sendable, Equatable {
     public var phase: MelodyPlaybackPhase
     public var offersStart: Bool
-    public var attacks: [PlaybackAttack]
+    /// Present only when the sounding clock should install this sequence and start at zero.
+    public var sequence: PlaybackSequence?
     public var silenced: Bool
     public var line: PlaybackLine?
 
     public init(
         phase: MelodyPlaybackPhase,
         offersStart: Bool,
-        attacks: [PlaybackAttack],
+        sequence: PlaybackSequence?,
         silenced: Bool,
         line: PlaybackLine?
     ) {
         self.phase = phase
         self.offersStart = offersStart
-        self.attacks = attacks
+        self.sequence = sequence
         self.silenced = silenced
         self.line = line
     }
@@ -90,6 +121,8 @@ public final class MelodyPlayback {
 
     private var phase: MelodyPlaybackPhase = .idle
     private var quarter: Double = 0
+    private var originQuarter: Double = 0
+    private var scheduledSeconds: TimeInterval = 0
     private var output: PlaybackOutput = .speakers
     private var spans: [Span] = []
 
@@ -98,44 +131,59 @@ public final class MelodyPlayback {
         load(musicXML)
     }
 
+    public func arm() -> MelodyPlaybackMoment {
+        guard isAvailable, phase != .playing, phase != .preparing else {
+            return moment(sequence: nil, silenced: false)
+        }
+        phase = .preparing
+        return moment(sequence: nil, silenced: false)
+    }
+
+    public func beginSounding() -> MelodyPlaybackMoment {
+        guard phase == .preparing else { return moment(sequence: nil, silenced: false) }
+        phase = .idle
+        return start()
+    }
+
     public func start() -> MelodyPlaybackMoment {
-        guard isAvailable else { return moment(attacks: [], silenced: false) }
-        if phase == .playing { return moment(attacks: [], silenced: false) }
+        guard isAvailable else { return moment(sequence: nil, silenced: false) }
+        if phase == .playing { return moment(sequence: nil, silenced: false) }
+        let cutRelease = phase == .finished
         if phase == .paused, let span = span(containing: quarter) {
             quarter = span.attackStart
         } else {
             quarter = 0
         }
+        originQuarter = quarter
         phase = .playing
-        return moment(attacks: attacks(at: quarter), silenced: false)
+        let sequence = sequence(from: originQuarter)
+        scheduledSeconds = sequence.seconds
+        return moment(sequence: sequence, silenced: cutRelease)
     }
 
     public func pause() -> MelodyPlaybackMoment {
-        guard phase == .playing else { return moment(attacks: [], silenced: false) }
+        if phase == .preparing {
+            phase = .idle
+            quarter = 0
+            return moment(sequence: nil, silenced: false)
+        }
+        guard phase == .playing else { return moment(sequence: nil, silenced: false) }
         phase = .paused
-        return moment(attacks: [], silenced: true)
+        return moment(sequence: nil, silenced: true)
     }
 
-    public func advance(seconds: TimeInterval) -> MelodyPlaybackMoment {
-        guard phase == .playing, seconds > 0 else {
-            return moment(attacks: [], silenced: false)
+    /// `seconds` is how far the sounding clock has moved through the current sequence.
+    public func place(seconds: TimeInterval) -> MelodyPlaybackMoment {
+        guard phase == .playing, seconds >= 0 else {
+            return moment(sequence: nil, silenced: false)
         }
-        let previous = quarter
-        let next = previous + seconds * tempo.quartersPerMinute / 60
-        let total = spans.last.map { $0.performanceStart + $0.performanceQuarters } ?? 0
-        if next >= total - 1e-9 {
-            let crossed = spans.filter {
-                $0.isAttack && $0.performanceStart > previous + 1e-9 && $0.performanceStart < total - 1e-9
-            }
-            quarter = total
+        if seconds >= scheduledSeconds - 1e-9 {
+            quarter = originQuarter + scheduledSeconds * tempo.quartersPerMinute / 60
             phase = .finished
-            return moment(attacks: crossed.map(attack), silenced: true)
+            return moment(sequence: nil, silenced: false)
         }
-        let crossed = spans.filter {
-            $0.isAttack && $0.performanceStart > previous + 1e-9 && $0.performanceStart <= next + 1e-9
-        }
-        quarter = next
-        return moment(attacks: crossed.map(attack), silenced: false)
+        quarter = originQuarter + seconds * tempo.quartersPerMinute / 60
+        return moment(sequence: nil, silenced: false)
     }
 
     /// Headphones becoming speakers while a note is going is one pause.
@@ -146,35 +194,60 @@ public final class MelodyPlayback {
         if phase == .playing, previous == .headphones, output == .speakers {
             return pause()
         }
-        return moment(attacks: [], silenced: false)
+        return moment(sequence: nil, silenced: false)
     }
 
     public func dismiss() -> MelodyPlaybackMoment {
-        let stop = phase == .playing || phase == .paused
-        phase = .idle
-        quarter = 0
-        return moment(attacks: [], silenced: stop)
+        dropPosition(silenced: soundMayStillBeGoing)
     }
 
     public func replace(musicXML: String?) -> MelodyPlaybackMoment {
-        let stop = phase == .playing || phase == .paused
+        let stop = soundMayStillBeGoing
         load(musicXML)
-        phase = .idle
-        quarter = 0
-        return moment(attacks: [], silenced: stop)
+        return dropPosition(silenced: stop)
     }
 
     public var moment: MelodyPlaybackMoment {
-        moment(attacks: [], silenced: false)
+        moment(sequence: nil, silenced: false)
     }
 
-    private func moment(attacks: [PlaybackAttack], silenced: Bool) -> MelodyPlaybackMoment {
+    /// Playing, paused, or a finished note whose release may still be ringing.
+    private var soundMayStillBeGoing: Bool {
+        phase == .playing || phase == .paused || phase == .finished
+    }
+
+    private func dropPosition(silenced: Bool) -> MelodyPlaybackMoment {
+        phase = .idle
+        quarter = 0
+        originQuarter = 0
+        scheduledSeconds = 0
+        return moment(sequence: nil, silenced: silenced)
+    }
+
+    private func moment(sequence: PlaybackSequence?, silenced: Bool) -> MelodyPlaybackMoment {
         MelodyPlaybackMoment(
             phase: phase,
-            offersStart: phase != .playing && isAvailable,
-            attacks: attacks,
+            offersStart: phase != .playing && phase != .preparing && isAvailable,
+            sequence: sequence,
             silenced: silenced,
             line: line()
+        )
+    }
+
+    private func sequence(from origin: Double) -> PlaybackSequence {
+        let secondsPerQuarter = 60 / tempo.quartersPerMinute
+        let total = spans.last.map { $0.performanceStart + $0.performanceQuarters } ?? 0
+        let notes = spans.filter { $0.isAttack && $0.performanceStart + 1e-9 >= origin }.map { span in
+            PlaybackNote(
+                midi: span.midi ?? 0,
+                velocity: span.velocity,
+                startSeconds: (span.performanceStart - origin) * secondsPerQuarter,
+                soundingSeconds: span.soundingQuarters * secondsPerQuarter
+            )
+        }
+        return PlaybackSequence(
+            notes: notes,
+            seconds: max(0, (total - origin) * secondsPerQuarter)
         )
     }
 
@@ -198,18 +271,6 @@ public final class MelodyPlayback {
             quarter + 1e-9 >= $0.performanceStart
                 && quarter < $0.performanceStart + $0.performanceQuarters - 1e-9
         } ?? spans.last(where: { abs(($0.performanceStart + $0.performanceQuarters) - quarter) < 1e-6 })
-    }
-
-    private func attacks(at quarter: Double) -> [PlaybackAttack] {
-        spans.filter { $0.isAttack && abs($0.performanceStart - quarter) < 1e-6 }.map(attack)
-    }
-
-    private func attack(_ span: Span) -> PlaybackAttack {
-        PlaybackAttack(
-            midi: span.midi ?? 0,
-            velocity: span.velocity,
-            soundingSeconds: span.soundingQuarters * 60 / tempo.quartersPerMinute
-        )
     }
 
     private func load(_ musicXML: String?) {

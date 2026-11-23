@@ -184,7 +184,7 @@ struct StaffMelodySceneSessionTests {
         session.performHoverBarSymbol()
         #expect(session.hoverBarSymbolName == "pause.fill")
         #expect(session.playbackLine == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
-        #expect(session.playbackMoment.attacks.first?.midi == 60)
+        #expect(session.playbackMoment.sequence?.notes.first?.midi == 60)
 
         session.performHoverBarExtra()
         #expect(!session.showsContent)
@@ -194,6 +194,58 @@ struct StaffMelodySceneSessionTests {
 
         session.performHoverBarExtra()
         #expect(session.playbackLine != nil)
+
+        session.placePlayback(at: 0.5)
+        #expect(session.playbackMoment.phase == .playing)
+        #expect(session.playbackMoment.sequence == nil)
+    }
+
+    @Test("play while the piano is loading shows pause and draws no line")
+    func playWhileThePianoLoadsWaitsWithoutALine() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("staff-playback-loading-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = MelodyLibrary(rootDirectory: root)
+        guard case .imported(let melody, _) = library.importMusicXML(MusicXMLFixtures.simpleFourMeasures) else {
+            Issue.record("expected a melody")
+            return
+        }
+        let session = StaffMelodySceneSession()
+        session.beginRest(
+            in: library,
+            using: .manual(melodyID: melody.id),
+            continuingSameRest: false,
+            selection: MelodySelectionState(randomIndex: { _ in 0 }),
+            scalePercent: 60,
+            durationProportionPercent: 60,
+            tempo: .lento
+        )
+        session.notePianoLoading()
+        session.performHoverBarSymbol()
+        #expect(session.hoverBarSymbolName == "pause.fill")
+        #expect(session.playbackLine == nil)
+        #expect(session.playbackMoment.phase == .preparing)
+        #expect(session.playbackMoment.sequence == nil)
+
+        session.notePianoReady(false)
+        session.performHoverBarSymbol()
+        #expect(session.hoverBarSymbolName == "play.fill")
+        #expect(session.playbackMoment.phase == .idle)
+        #expect(session.playbackLine == nil)
+
+        session.notePianoLoading()
+        session.performHoverBarSymbol()
+        session.performHoverBarSymbol()
+        #expect(session.hoverBarSymbolName == "play.fill")
+        #expect(session.playbackMoment.phase == .idle)
+
+        session.notePianoLoading()
+        session.performHoverBarSymbol()
+        session.notePianoReady(true)
+        #expect(session.hoverBarSymbolName == "pause.fill")
+        #expect(session.playbackMoment.phase == .playing)
+        #expect(session.playbackLine == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
+        #expect(session.playbackMoment.sequence?.notes.first?.midi == 60)
     }
 
     @Test("replacing the melody stops playback at the start of the new one")

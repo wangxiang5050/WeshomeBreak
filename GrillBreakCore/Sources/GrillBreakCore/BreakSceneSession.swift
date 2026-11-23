@@ -22,7 +22,11 @@ public class BreakSceneSession: ObservableObject {
 
     public func performHoverBarSymbol() {}
 
-    public func tickPlayback(seconds: TimeInterval) {}
+    public func notePianoLoading() {}
+
+    public func notePianoReady(_ ready: Bool) {}
+
+    public func placePlayback(at seconds: TimeInterval) {}
 
     public func dismissPlayback() {}
 
@@ -36,7 +40,7 @@ public class BreakSceneSession: ObservableObject {
     @Published public private(set) var playbackSound = MelodyPlaybackMoment(
         phase: .idle,
         offersStart: false,
-        attacks: [],
+        sequence: nil,
         silenced: false,
         line: nil
     )
@@ -66,6 +70,7 @@ public final class StaffMelodySceneSession: BreakSceneSession {
     private var durationProportionPercent = 60
     private var tempo = PlaybackTempo.defaultTempo
     private var playback = MelodyPlayback(musicXML: nil, tempo: .defaultTempo)
+    private var pianoBank = PianoBank.ready
 
     public init(melodyID: UUID? = nil) {
         self.melodyID = melodyID
@@ -152,12 +157,42 @@ public final class StaffMelodySceneSession: BreakSceneSession {
         visibility.toggle()
     }
 
-    public override func performHoverBarSymbol() {
-        publishPlayback(playbackMoment.offersStart ? playback.start() : playback.pause())
+    public override func notePianoLoading() {
+        pianoBank = .loading
     }
 
-    public override func tickPlayback(seconds: TimeInterval) {
-        let next = playback.advance(seconds: seconds)
+    public override func notePianoReady(_ ready: Bool) {
+        if ready {
+            pianoBank = .ready
+            if playbackMoment.phase == .preparing {
+                publishPlayback(playback.beginSounding())
+            }
+        } else {
+            pianoBank = .unavailable
+            if playbackMoment.phase == .preparing {
+                publishPlayback(playback.pause())
+            }
+        }
+    }
+
+    public override func performHoverBarSymbol() {
+        if playbackMoment.offersStart {
+            switch pianoBank {
+            case .ready:
+                publishPlayback(playback.start())
+            case .loading:
+                publishPlayback(playback.arm())
+            case .unavailable:
+                break
+            }
+        } else {
+            publishPlayback(playback.pause())
+        }
+    }
+
+    public override func placePlayback(at seconds: TimeInterval) {
+        guard playbackMoment.phase == .playing else { return }
+        let next = playback.place(seconds: seconds)
         if next != playbackSound {
             publishPlayback(next)
         }
@@ -173,6 +208,12 @@ public final class StaffMelodySceneSession: BreakSceneSession {
             publishPlayback(next)
         }
     }
+}
+
+private enum PianoBank {
+    case ready
+    case loading
+    case unavailable
 }
 
 /// Session-scoped visibility of Staff Melody Scene content during one break.

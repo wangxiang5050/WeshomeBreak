@@ -4,46 +4,129 @@ import CoreAudio
 import Foundation
 import GrillBreakCore
 
-/// Plays Melody Playback attacks on the system piano. One instance per rest,
-/// owned by the overlay manager so each screen does not sound its own copy.
+/// Plays one Melody Playback sequence on the bundled piano. One instance for
+/// the whole rest, owned by the overlay manager so each screen does not sound
+/// its own copy. The sequencer is the clock; the line does not trigger notes.
 final class PianoOutput {
+    /// 系统通用 MIDI 音色库。打包的钢琴加载失败时才用 Program 0。
+    static let systemPianoBank = URL(
+        fileURLWithPath: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls"
+    )
     private let engine = AVAudioEngine()
     private let sampler = AVAudioUnitSampler()
+    private var sequencer: AVAudioSequencer?
     private var started = false
-    private var noteOffs: [DispatchWorkItem] = []
+    private var bankReady = false
+    private var instrumentLoaded = false
+    private var running = false
+    private var sample = 0.0
+    private var sampleAt = 0.0
+    private var haveSample = false
+    private var attached = false
+    /// Held for the whole bank load so the main thread can keep taking clicks.
+    private let gate = NSLock()
+    private let stashLock = NSLock()
+    private var stashed: MelodyPlaybackMoment?
 
-    func render(_ moment: MelodyPlaybackMoment) {
-        if moment.silenced {
-            silence()
+    func prepare(completion: @escaping (Bool) -> Void) {
+        if bankReady {
+            completion(true)
+            return
         }
-        for attack in moment.attacks {
-            guard startIfNeeded() else { return }
-            let note = UInt8(clamping: attack.midi)
-            let velocity = UInt8(clamping: min(127, max(1, attack.velocity)))
-            sampler.stopNote(note, onChannel: 0)
-            sampler.startNote(note, withVelocity: velocity, onChannel: 0)
-            let off = DispatchWorkItem { [weak self] in
-                self?.sampler.stopNote(note, onChannel: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.gate.lock()
+            let ready = self.startIfNeeded()
+            self.stashLock.lock()
+            let stashed = self.stashed
+            self.stashed = nil
+            self.stashLock.unlock()
+            if let stashed {
+                self.apply(stashed)
             }
-            noteOffs.append(off)
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + max(0, attack.soundingSeconds),
-                execute: off
-            )
+            self.gate.unlock()
+            DispatchQueue.main.async {
+                self.bankReady = ready
+                completion(ready)
+            }
         }
     }
 
+    func render(_ moment: MelodyPlaybackMoment) {
+        if gate.try() {
+            apply(moment)
+            gate.unlock()
+            return
+        }
+        stashLock.lock()
+        stashed = moment
+        stashLock.unlock()
+    }
+
+    private func apply(_ moment: MelodyPlaybackMoment) {
+        if moment.silenced {
+            silence()
+        }
+        if let sequence = moment.sequence {
+            install(sequence)
+        }
+        if moment.phase != .playing {
+            running = false
+        }
+    }
+
+    func musicalSeconds(now: TimeInterval) -> TimeInterval? {
+        guard gate.try() else { return nil }
+        defer { gate.unlock() }
+        guard running, let sequencer else { return nil }
+        let raw = sequencer.currentPositionInSeconds
+        if !haveSample || raw + 0.000_001 < sample {
+            sample = raw
+            sampleAt = now
+            haveSample = true
+        } else if raw > sample + 0.000_001 {
+            sample = raw
+            sampleAt = now
+        }
+        return PlayheadTiming.heardSeconds(
+            sampled: sample,
+            sampledAt: sampleAt,
+            now: now,
+            latency: engine.outputNode.presentationLatency,
+            maximumLead: 1.0 / 30
+        )
+    }
+
     func stop() {
+        gate.lock()
         silence()
+        sequencer = nil
         if started {
             engine.stop()
             started = false
         }
+        gate.unlock()
+    }
+
+    private func install(_ sequence: PlaybackSequence) {
+        guard startIfNeeded(), let sequencer else { return }
+        sequencer.stop()
+        let tail = engine.outputNode.presentationLatency + 0.05
+        guard let data = Self.midiData(sequence: sequence, tail: tail) else { return }
+        do {
+            try sequencer.load(from: data, options: [])
+            sequencer.prepareToPlay()
+            try sequencer.start()
+            running = true
+            haveSample = false
+        } catch {
+            running = false
+        }
     }
 
     private func silence() {
-        noteOffs.forEach { $0.cancel() }
-        noteOffs.removeAll()
+        sequencer?.stop()
+        running = false
+        haveSample = false
         guard started else { return }
         for midi in 0..<128 {
             sampler.stopNote(UInt8(midi), onChannel: 0)
@@ -52,23 +135,94 @@ final class PianoOutput {
 
     private func startIfNeeded() -> Bool {
         if started { return true }
-        engine.attach(sampler)
-        engine.connect(sampler, to: engine.mainMixerNode, format: nil)
+        if !attached {
+            engine.attach(sampler)
+            engine.connect(sampler, to: engine.mainMixerNode, format: nil)
+            attached = true
+        }
         do {
-            try engine.start()
-            let bank = URL(fileURLWithPath: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls")
-            try sampler.loadSoundBankInstrument(
-                at: bank,
-                program: 0,
-                bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
-                bankLSB: UInt8(kAUSampler_DefaultBankLSB)
-            )
+            if !engine.isRunning {
+                try engine.start()
+            }
+            if sequencer == nil {
+                sequencer = AVAudioSequencer(audioEngine: engine)
+            }
+            if !instrumentLoaded {
+                instrumentLoaded = loadBundledPiano() || load(
+                    Self.systemPianoBank,
+                    bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
+                    bankLSB: UInt8(kAUSampler_DefaultBankLSB)
+                )
+            }
+            guard instrumentLoaded else { return false }
             started = true
             return true
         } catch {
             engine.stop()
+            started = false
+            sequencer = nil
             return false
         }
+    }
+
+    private func loadBundledPiano() -> Bool {
+        guard let url = Bundle.main.url(forResource: "UprightPianoKW", withExtension: "sf2") else {
+            return false
+        }
+        return load(url, bankMSB: 0, bankLSB: 0)
+    }
+
+    private func load(_ url: URL, bankMSB: UInt8, bankLSB: UInt8) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        do {
+            try sampler.loadSoundBankInstrument(
+                at: url,
+                program: 0,
+                bankMSB: bankMSB,
+                bankLSB: bankLSB
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Tempo is 60 so one beat is one second. The track runs slightly past the
+    /// score so a note-off at the boundary is still delivered.
+    private static func midiData(sequence: PlaybackSequence, tail: TimeInterval) -> Data? {
+        var music: MusicSequence?
+        guard NewMusicSequence(&music) == noErr, let music else { return nil }
+        defer { DisposeMusicSequence(music) }
+
+        var tempoTrack: MusicTrack?
+        guard MusicSequenceGetTempoTrack(music, &tempoTrack) == noErr, let tempoTrack else { return nil }
+        guard MusicTrackNewExtendedTempoEvent(tempoTrack, 0, 60) == noErr else { return nil }
+
+        var track: MusicTrack?
+        guard MusicSequenceNewTrack(music, &track) == noErr, let track else { return nil }
+        for note in sequence.notes {
+            var message = MIDINoteMessage(
+                channel: 0,
+                note: UInt8(clamping: note.midi),
+                velocity: UInt8(clamping: min(127, max(1, note.velocity))),
+                releaseVelocity: 0,
+                duration: Float32(max(0.01, note.soundingSeconds))
+            )
+            guard MusicTrackNewMIDINoteEvent(track, MusicTimeStamp(max(0, note.startSeconds)), &message) == noErr else {
+                return nil
+            }
+        }
+
+        var length = MusicTimeStamp(max(0, sequence.seconds) + max(0, tail))
+        let size = UInt32(MemoryLayout<MusicTimeStamp>.size)
+        MusicTrackSetProperty(track, kSequenceTrackProperty_TrackLength, &length, size)
+        MusicTrackSetProperty(tempoTrack, kSequenceTrackProperty_TrackLength, &length, size)
+
+        var data: Unmanaged<CFData>?
+        guard MusicSequenceFileCreateData(music, .midiType, .eraseFile, 480, &data) == noErr,
+              let data
+        else { return nil }
+        return data.takeRetainedValue() as Data
     }
 }
 

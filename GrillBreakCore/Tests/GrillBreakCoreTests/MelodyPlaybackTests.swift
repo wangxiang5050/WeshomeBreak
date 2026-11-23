@@ -20,13 +20,39 @@ struct MelodyPlaybackTests {
         #expect(moment.phase == .playing)
         #expect(!moment.offersStart)
         #expect(!moment.silenced)
-        #expect(moment.attacks == [
-            PlaybackAttack(midi: 60, velocity: 84, soundingSeconds: 0.5)
-        ])
+        #expect(moment.sequence == PlaybackSequence(
+            notes: [PlaybackNote(midi: 60, velocity: 84, startSeconds: 0, soundingSeconds: 0.5)],
+            seconds: 0.5
+        ))
         #expect(moment.line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
     }
 
-    @Test("advance sounds the next note and walks the line")
+    @Test("the heard line leads a sequencer sample by at most one frame, minus output latency")
+    func heardLineInterpolatesAndSubtractsLatency() {
+        #expect(PlayheadTiming.heardSeconds(
+            sampled: 1,
+            sampledAt: 0,
+            now: 0.25,
+            latency: 0.125,
+            maximumLead: 0.5
+        ) == 1.125)
+        #expect(PlayheadTiming.heardSeconds(
+            sampled: 1,
+            sampledAt: 0,
+            now: 1,
+            latency: 0.125,
+            maximumLead: 0.5
+        ) == 1.375)
+        #expect(PlayheadTiming.heardSeconds(
+            sampled: 0,
+            sampledAt: 0,
+            now: 0,
+            latency: 0.125,
+            maximumLead: 0.5
+        ) == 0)
+    }
+
+    @Test("start schedules every note and a reported position only walks the line")
     func advanceSoundsTheNextNote() {
         let playback = MelodyPlayback(
             musicXML: score([
@@ -37,14 +63,19 @@ struct MelodyPlaybackTests {
             ]),
             tempo: .lento
         )
-        _ = playback.start()
+        let started = playback.start()
+        #expect(started.sequence == PlaybackSequence(
+            notes: [
+                PlaybackNote(midi: 60, velocity: 84, startSeconds: 0, soundingSeconds: 1),
+                PlaybackNote(midi: 64, velocity: 84, startSeconds: 1, soundingSeconds: 1)
+            ],
+            seconds: 2
+        ))
 
-        let moment = playback.advance(seconds: 1)
+        let moment = playback.place(seconds: 1)
 
         #expect(moment.phase == .playing)
-        #expect(moment.attacks == [
-            PlaybackAttack(midi: 64, velocity: 84, soundingSeconds: 1)
-        ])
+        #expect(moment.sequence == nil)
         #expect(moment.line == PlaybackLine(eventIndex: 1, fractionThroughEvent: 0))
     }
 
@@ -60,21 +91,27 @@ struct MelodyPlaybackTests {
             tempo: .lento
         )
         _ = playback.start()
-        let paused = playback.advance(seconds: 0.5)
+        let paused = playback.place(seconds: 0.5)
         #expect(paused.line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0.5))
 
         let held = playback.pause()
         #expect(held.phase == .paused)
         #expect(held.offersStart)
         #expect(held.silenced)
+        #expect(held.sequence == nil)
         #expect(held.line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0.5))
 
         let restarted = playback.start()
         #expect(restarted.phase == .playing)
         #expect(!restarted.offersStart)
-        #expect(restarted.attacks == [
-            PlaybackAttack(midi: 60, velocity: 84, soundingSeconds: 1)
-        ])
+        #expect(!restarted.silenced)
+        #expect(restarted.sequence == PlaybackSequence(
+            notes: [
+                PlaybackNote(midi: 60, velocity: 84, startSeconds: 0, soundingSeconds: 1),
+                PlaybackNote(midi: 64, velocity: 84, startSeconds: 1, soundingSeconds: 1)
+            ],
+            seconds: 2
+        ))
         #expect(restarted.line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
     }
 
@@ -91,11 +128,11 @@ struct MelodyPlaybackTests {
         )
         _ = playback.start()
 
-        let moment = playback.advance(seconds: 1)
+        let moment = playback.place(seconds: 1)
 
         #expect(moment.phase == .playing)
         #expect(!moment.offersStart)
-        #expect(moment.attacks.isEmpty)
+        #expect(moment.sequence == nil)
         #expect(moment.line == PlaybackLine(eventIndex: 1, fractionThroughEvent: 0))
     }
 
@@ -109,17 +146,19 @@ struct MelodyPlaybackTests {
         )
         _ = playback.start()
 
-        let finished = playback.advance(seconds: 1)
+        let finished = playback.place(seconds: 1)
 
         #expect(finished.phase == .finished)
         #expect(finished.offersStart)
-        #expect(finished.silenced)
+        #expect(!finished.silenced)
         #expect(finished.line == nil)
 
         let again = playback.start()
-        #expect(again.attacks == [
-            PlaybackAttack(midi: 60, velocity: 84, soundingSeconds: 1)
-        ])
+        #expect(again.silenced)
+        #expect(again.sequence == PlaybackSequence(
+            notes: [PlaybackNote(midi: 60, velocity: 84, startSeconds: 0, soundingSeconds: 1)],
+            seconds: 1
+        ))
         #expect(again.line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
     }
 
@@ -134,15 +173,21 @@ struct MelodyPlaybackTests {
             ]),
             tempo: .lento
         )
-        _ = playback.start()
-        let second = playback.advance(seconds: 1)
-        let finished = playback.advance(seconds: 1)
+        let started = playback.start()
+        let second = playback.place(seconds: 1)
+        let finished = playback.place(seconds: 2)
 
-        #expect(second.attacks == [
-            PlaybackAttack(midi: 60, velocity: 84, soundingSeconds: 1)
-        ])
+        #expect(started.sequence == PlaybackSequence(
+            notes: [
+                PlaybackNote(midi: 60, velocity: 84, startSeconds: 0, soundingSeconds: 1),
+                PlaybackNote(midi: 60, velocity: 84, startSeconds: 1, soundingSeconds: 1)
+            ],
+            seconds: 2
+        ))
+        #expect(second.sequence == nil)
         #expect(second.line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
         #expect(finished.phase == .finished)
+        #expect(!finished.silenced)
     }
 
     @Test("a dynamic mark holds until the next one, and a hairpin steps one level")
@@ -161,14 +206,14 @@ struct MelodyPlaybackTests {
         )
 
         let first = playback.start()
-        let second = playback.advance(seconds: 1)
 
-        #expect(first.attacks == [
-            PlaybackAttack(midi: 60, velocity: 54, soundingSeconds: 1)
-        ])
-        #expect(second.attacks == [
-            PlaybackAttack(midi: 64, velocity: 68, soundingSeconds: 1)
-        ])
+        #expect(first.sequence == PlaybackSequence(
+            notes: [
+                PlaybackNote(midi: 60, velocity: 54, startSeconds: 0, soundingSeconds: 1),
+                PlaybackNote(midi: 64, velocity: 68, startSeconds: 1, soundingSeconds: 1)
+            ],
+            seconds: 2
+        ))
     }
 
     @Test("staccato shortens the sound and a fermata stretches the note")
@@ -188,9 +233,10 @@ struct MelodyPlaybackTests {
             ]),
             tempo: .lento
         )
-        #expect(staccato.start().attacks == [
-            PlaybackAttack(midi: 60, velocity: 84, soundingSeconds: 0.5)
-        ])
+        #expect(staccato.start().sequence == PlaybackSequence(
+            notes: [PlaybackNote(midi: 60, velocity: 84, startSeconds: 0, soundingSeconds: 0.5)],
+            seconds: 1
+        ))
 
         let fermata = MelodyPlayback(
             musicXML: score([
@@ -208,10 +254,10 @@ struct MelodyPlaybackTests {
             tempo: .lento
         )
         _ = fermata.start()
-        let still = fermata.advance(seconds: 1)
+        let still = fermata.place(seconds: 1)
         #expect(still.phase == .playing)
         #expect(still.line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0.5))
-        #expect(fermata.advance(seconds: 1).phase == .finished)
+        #expect(fermata.place(seconds: 2).phase == .finished)
     }
 
     @Test("a tie sounds once and the line walks into the second note")
@@ -239,14 +285,24 @@ struct MelodyPlaybackTests {
         )
 
         let first = playback.start()
-        let second = playback.advance(seconds: 1)
+        let second = playback.place(seconds: 1)
 
-        #expect(first.attacks == [
-            PlaybackAttack(midi: 60, velocity: 84, soundingSeconds: 2)
-        ])
-        #expect(second.attacks.isEmpty)
+        #expect(first.sequence == PlaybackSequence(
+            notes: [PlaybackNote(midi: 60, velocity: 84, startSeconds: 0, soundingSeconds: 2)],
+            seconds: 2
+        ))
+        #expect(second.sequence == nil)
         #expect(second.phase == .playing)
         #expect(second.line == PlaybackLine(eventIndex: 1, fractionThroughEvent: 0))
+
+        let held = playback.pause()
+        #expect(held.line == PlaybackLine(eventIndex: 1, fractionThroughEvent: 0))
+        let replayed = playback.start()
+        #expect(replayed.line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
+        #expect(replayed.sequence == PlaybackSequence(
+            notes: [PlaybackNote(midi: 60, velocity: 84, startSeconds: 0, soundingSeconds: 2)],
+            seconds: 2
+        ))
     }
 
     @Test("an octave mark changes the sounding pitch")
@@ -261,7 +317,7 @@ struct MelodyPlaybackTests {
             tempo: .lento
         )
 
-        #expect(playback.start().attacks.first?.midi == 72)
+        #expect(playback.start().sequence?.notes.first?.midi == 72)
     }
 
     @Test("sfz and fp affect only the attack they mark")
@@ -280,10 +336,9 @@ struct MelodyPlaybackTests {
             tempo: .lento
         )
 
-        #expect(playback.start().attacks.first?.velocity == 112)
-        #expect(playback.advance(seconds: 1).attacks.first?.velocity == 84)
-        #expect(playback.advance(seconds: 1).attacks.first?.velocity == 100)
-        #expect(playback.advance(seconds: 1).attacks.first?.velocity == 54)
+        let notes = playback.start().sequence?.notes ?? []
+        #expect(notes.map(\.velocity) == [112, 84, 100, 54])
+        #expect(notes.map(\.startSeconds) == [0, 1, 2, 3])
     }
 
     @Test("leaving headphones for speakers pauses; moving onto headphones does not")
@@ -318,7 +373,7 @@ struct MelodyPlaybackTests {
             tempo: .lento
         )
         _ = playback.start()
-        _ = playback.advance(seconds: 0.5)
+        _ = playback.place(seconds: 0.5)
 
         let dismissed = playback.dismiss()
         #expect(dismissed.phase == .idle)
@@ -326,13 +381,39 @@ struct MelodyPlaybackTests {
         #expect(dismissed.line == nil)
         #expect(playback.start().line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
 
-        _ = playback.advance(seconds: 0.25)
+        _ = playback.place(seconds: 0.25)
         let replaced = playback.replace(musicXML: score([
             measure([note(step: "G", octave: 4, duration: 1, type: "quarter")])
         ]))
         #expect(replaced.phase == .idle)
         #expect(replaced.silenced)
-        #expect(playback.start().attacks.first?.midi == 67)
+        #expect(playback.start().sequence?.notes.first?.midi == 67)
+    }
+
+    @Test("a finished release is cut when the melody is replaced or the rest ends")
+    func finishedReleaseIsCutOnReplaceOrDismiss() {
+        let playback = MelodyPlayback(
+            musicXML: score([
+                measure([note(step: "C", octave: 4, duration: 1, type: "quarter")])
+            ]),
+            tempo: .lento
+        )
+        _ = playback.start()
+        #expect(!playback.place(seconds: 1).silenced)
+
+        let replaced = playback.replace(musicXML: score([
+            measure([note(step: "G", octave: 4, duration: 1, type: "quarter")])
+        ]))
+        #expect(replaced.phase == .idle)
+        #expect(replaced.silenced)
+        #expect(replaced.line == nil)
+
+        _ = playback.start()
+        _ = playback.place(seconds: 1)
+        let dismissed = playback.dismiss()
+        #expect(dismissed.phase == .idle)
+        #expect(dismissed.silenced)
+        #expect(dismissed.line == nil)
     }
 
     @Test("D.C. al Fine jumps once and stops at Fine")
@@ -351,10 +432,9 @@ struct MelodyPlaybackTests {
             tempo: .lento
         )
 
-        #expect(playback.start().attacks.first?.midi == 60)
-        #expect(playback.advance(seconds: 1).attacks.first?.midi == 62)
-        #expect(playback.advance(seconds: 1).attacks.first?.midi == 60)
-        #expect(playback.advance(seconds: 1).phase == .finished)
+        let notes = playback.start().sequence?.notes ?? []
+        #expect(notes.map(\.midi) == [60, 62, 60])
+        #expect(playback.place(seconds: 3).phase == .finished)
     }
 
     @Test("a dal segno with no segno is ignored")
@@ -369,7 +449,36 @@ struct MelodyPlaybackTests {
             tempo: .lento
         )
         _ = playback.start()
-        #expect(playback.advance(seconds: 1).phase == .finished)
+        #expect(playback.place(seconds: 1).phase == .finished)
+    }
+
+    @Test("arming waits without a line and a second pause cancels")
+    func armWaitsAndPauseCancels() {
+        let playback = MelodyPlayback(
+            musicXML: score([
+                measure([note(step: "C", octave: 4, duration: 1, type: "quarter")])
+            ]),
+            tempo: .lento
+        )
+
+        let armed = playback.arm()
+        #expect(armed.phase == .preparing)
+        #expect(!armed.offersStart)
+        #expect(armed.line == nil)
+        #expect(armed.sequence == nil)
+        #expect(!armed.silenced)
+
+        let cancelled = playback.pause()
+        #expect(cancelled.phase == .idle)
+        #expect(cancelled.offersStart)
+        #expect(!cancelled.silenced)
+
+        _ = playback.arm()
+        let begun = playback.beginSounding()
+        #expect(begun.phase == .playing)
+        #expect(begun.line == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
+        #expect(begun.sequence?.notes.first?.midi == 60)
+        #expect(!begun.silenced)
     }
 }
 
