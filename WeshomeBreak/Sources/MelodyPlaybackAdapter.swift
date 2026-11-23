@@ -12,6 +12,35 @@ final class PianoOutput {
     static let systemPianoBank = URL(
         fileURLWithPath: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls"
     )
+    /// AUSampler 认的是 melodic bank，不是 SF2 文件头里的 bank 0。
+    static let bundledBankMSB = UInt8(kAUSampler_DefaultMelodicBankMSB)
+    static let bundledBankLSB = UInt8(kAUSampler_DefaultBankLSB)
+
+    var instrumentNeedsLoad: Bool {
+        gate.lock()
+        defer { gate.unlock() }
+        return !instrumentLoaded
+    }
+
+    static func loadInstrument(
+        _ sampler: AVAudioUnitSampler,
+        url: URL,
+        bankMSB: UInt8,
+        bankLSB: UInt8
+    ) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
+        do {
+            try sampler.loadSoundBankInstrument(
+                at: url,
+                program: 0,
+                bankMSB: bankMSB,
+                bankLSB: bankLSB
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
     private let engine = AVAudioEngine()
     private let sampler = AVAudioUnitSampler()
     private var sequencer: AVAudioSequencer?
@@ -23,6 +52,7 @@ final class PianoOutput {
     private var sampleAt = 0.0
     private var haveSample = false
     private var attached = false
+    private var epoch = 0
     /// Held for the whole bank load so the main thread can keep taking clicks.
     private let gate = NSLock()
     private let stashLock = NSLock()
@@ -33,18 +63,20 @@ final class PianoOutput {
             completion(true)
             return
         }
+        let epoch = self.epoch
         DispatchQueue.global(qos: .userInitiated).async {
             self.gate.lock()
-            let ready = self.startIfNeeded()
+            let ready = self.epoch == epoch && self.startIfNeeded()
             self.stashLock.lock()
             let stashed = self.stashed
             self.stashed = nil
             self.stashLock.unlock()
-            if let stashed {
+            if let stashed, self.epoch == epoch {
                 self.apply(stashed)
             }
             self.gate.unlock()
             DispatchQueue.main.async {
+                guard self.epoch == epoch else { return }
                 self.bankReady = ready
                 completion(ready)
             }
@@ -98,13 +130,16 @@ final class PianoOutput {
 
     func stop() {
         gate.lock()
+        epoch += 1
         silence()
         sequencer = nil
         if started {
             engine.stop()
             started = false
         }
+        instrumentLoaded = false
         gate.unlock()
+        bankReady = false
     }
 
     private func install(_ sequence: PlaybackSequence) {
@@ -148,10 +183,11 @@ final class PianoOutput {
                 sequencer = AVAudioSequencer(audioEngine: engine)
             }
             if !instrumentLoaded {
-                instrumentLoaded = loadBundledPiano() || load(
-                    Self.systemPianoBank,
-                    bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
-                    bankLSB: UInt8(kAUSampler_DefaultBankLSB)
+                instrumentLoaded = loadBundledPiano() || Self.loadInstrument(
+                    sampler,
+                    url: Self.systemPianoBank,
+                    bankMSB: Self.bundledBankMSB,
+                    bankLSB: Self.bundledBankLSB
                 )
             }
             guard instrumentLoaded else { return false }
@@ -169,22 +205,12 @@ final class PianoOutput {
         guard let url = Bundle.main.url(forResource: "UprightPianoKW", withExtension: "sf2") else {
             return false
         }
-        return load(url, bankMSB: 0, bankLSB: 0)
-    }
-
-    private func load(_ url: URL, bankMSB: UInt8, bankLSB: UInt8) -> Bool {
-        guard FileManager.default.fileExists(atPath: url.path) else { return false }
-        do {
-            try sampler.loadSoundBankInstrument(
-                at: url,
-                program: 0,
-                bankMSB: bankMSB,
-                bankLSB: bankLSB
-            )
-            return true
-        } catch {
-            return false
-        }
+        return Self.loadInstrument(
+            sampler,
+            url: url,
+            bankMSB: Self.bundledBankMSB,
+            bankLSB: Self.bundledBankLSB
+        )
     }
 
     /// Tempo is 60 so one beat is one second. The track runs slightly past the
