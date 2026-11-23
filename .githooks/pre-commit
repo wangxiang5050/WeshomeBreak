@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Linked into .git/hooks by scripts/install-git-hooks.sh.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+exec "$ROOT/scripts/check.sh"

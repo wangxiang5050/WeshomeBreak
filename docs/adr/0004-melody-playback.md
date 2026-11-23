@@ -12,6 +12,6 @@ Leaving headphone output pauses. Playback may still run on speakers. If the curr
 ## Consequences
 
 - One playback for the rest, started and paused from a single icon on each screen's hover bar. It does not start by itself, and closing the Rest Overlay discards the position.
-- The sequencer is the sounding clock. Decided notes are scheduled once; pause, resume, and stop rebuild or drop that sequence instead of seeking it. The line follows the sequencer position. The bundled piano is FreePats Upright Piano KW. The system DLS piano is only the fallback when that bank does not load.
+- The sequencer is the sounding clock. Decided notes are scheduled once; pause, resume, and stop rebuild or drop that sequence instead of seeking it. The line follows the sequencer position. The bundled piano file is `WeshomeBreak/Resources/UprightPianoKW.sf2` (FreePats Upright Piano KW), loaded as program 0 on bank MSB 0 / LSB 0. When that file does not load, the system DLS piano is the fallback, loaded on the melodic bank (`kAUSampler_DefaultMelodicBankMSB` / `kAUSampler_DefaultBankLSB`). Those two bank pairs stay distinct.
 - Pause stops the sound immediately. Starting again replays the current note from its attack. A vertical line tracks the moment on the current system and jumps back to that attack.
 - The break-reminder path stays visual. Melody Playback is not an alarm sound, a system notification, or a metronome.
