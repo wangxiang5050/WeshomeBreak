@@ -150,6 +150,7 @@ struct StaffMelodyPageTests {
         #expect(html.contains("querySelectorAll(\"\(StaffMelodyEngravingPage.playbackEventSelector)\")"))
         #expect(html.contains("closest(\"\(StaffMelodyEngravingPage.playbackStaffSelector)\")"))
         #expect(html.contains("line.id = \"playback-line\""))
+        #expect(html.contains("getScreenCTM"))
         #expect(html.contains("overlayDom"))
     }
 

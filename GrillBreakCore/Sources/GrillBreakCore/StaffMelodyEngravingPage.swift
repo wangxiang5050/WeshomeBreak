@@ -3,7 +3,7 @@ import Foundation
 /// Internal HTML builder for Staff Melody Page (transparent page + white ink).
 /// Callers use `StaffMelodyPage.prepare`; Verovio still runs in the app adapter.
 ///
-/// Verovio 把每个音和休止刻成文档顺序的 `g.note` / `g.rest`，与 Melody Playback 的事件下标一致。竖线是 `#playback-line`，竖跨该事件所在的 `g.staff`。
+/// Verovio 把每个音和休止刻成文档顺序的 `g.note` / `g.rest`，与 Melody Playback 的事件下标一致。竖线是 `#playback-line`，画在外层 svg 上，位置由内层坐标经 `getScreenCTM` 换到外层，竖跨该事件所在的 `g.staff`。
 enum StaffMelodyEngravingPage {
     static let playbackEventSelector = "g.note, g.rest"
     static let playbackStaffSelector = "g.staff"
@@ -145,6 +145,18 @@ enum StaffMelodyEngravingPage {
                   const notation = document.getElementById("notation");
                   notation.innerHTML = tk.renderToSVG(1);
                   applyWhiteInk(notation);
+                  // Verovio nests a scaled svg and translates g.page-margin.
+                  // getBBox is in that inner space; the line is drawn on the
+                  // outer svg, so the point has to be mapped or it sits off the staff.
+                  function pointInRoot(svg, el, x, y) {
+                    const point = svg.createSVGPoint();
+                    point.x = x;
+                    point.y = y;
+                    const from = el.getScreenCTM();
+                    const to = svg.getScreenCTM();
+                    if (!from || !to) return point;
+                    return point.matrixTransform(from).matrixTransform(to.inverse());
+                  }
                   window.placePlaybackLine = function (eventIndex, fraction) {
                     const svg = notation.querySelector("svg");
                     if (!svg) return;
@@ -161,14 +173,21 @@ enum StaffMelodyEngravingPage {
                       return;
                     }
                     const box = event.getBBox();
+                    const origin = pointInRoot(svg, event, box.x, box.y);
+                    const end = pointInRoot(svg, event, box.x + box.width, box.y);
                     const next = events[eventIndex + 1];
-                    const nextBox = next ? next.getBBox() : null;
-                    const nextX = nextBox && nextBox.x > box.x
-                      ? nextBox.x
-                      : box.x + Math.max(box.width, 40);
-                    const x = box.x + (nextX - box.x) * Math.min(1, Math.max(0, fraction));
-                    const staff = event.closest("\(Self.playbackStaffSelector)") || svg;
+                    let nextX = origin.x + Math.max(end.x - origin.x, 8);
+                    if (next) {
+                      const nextBox = next.getBBox();
+                      const nextOrigin = pointInRoot(svg, next, nextBox.x, nextBox.y);
+                      if (nextOrigin.x > origin.x + 0.5) nextX = nextOrigin.x;
+                    }
+                    const fractionClamped = Math.min(1, Math.max(0, fraction));
+                    const x = origin.x + (nextX - origin.x) * fractionClamped;
+                    const staff = event.closest("\(Self.playbackStaffSelector)") || event;
                     const staffBox = staff.getBBox();
+                    const top = pointInRoot(svg, staff, staffBox.x, staffBox.y);
+                    const bottom = pointInRoot(svg, staff, staffBox.x, staffBox.y + staffBox.height);
                     if (!line) {
                       line = document.createElementNS("http://www.w3.org/2000/svg", "line");
                       line.id = "playback-line";
@@ -176,8 +195,8 @@ enum StaffMelodyEngravingPage {
                     }
                     line.setAttribute("x1", x);
                     line.setAttribute("x2", x);
-                    line.setAttribute("y1", staffBox.y);
-                    line.setAttribute("y2", staffBox.y + staffBox.height);
+                    line.setAttribute("y1", Math.min(top.y, bottom.y));
+                    line.setAttribute("y2", Math.max(top.y, bottom.y));
                     publishOverlayDom(eventIndex);
                   };
                   function publishOverlayDom(eventIndex) {
