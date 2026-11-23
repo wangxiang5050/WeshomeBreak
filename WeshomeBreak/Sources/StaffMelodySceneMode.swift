@@ -44,7 +44,8 @@ struct StaffMelodySceneMode: BreakSceneMode {
             continuingSameRest: breakCycle.continuesSameRest,
             selection: selectionState,
             scalePercent: settingsStore.staffNotationScalePercent,
-            durationProportionPercent: settingsStore.durationProportionPercent
+            durationProportionPercent: settingsStore.durationProportionPercent,
+            tempo: settingsStore.playbackTempo
         )
         return session
     }
@@ -85,7 +86,7 @@ struct StaffMelodySceneView: View {
             if session.showsContent {
                 // Bottom inset keeps the score clear of the skip/delay
                 // control bar; the Melody Preview window has no such bar.
-                StaffMelodyPageContent(page: session.page)
+                StaffMelodyPageContent(page: session.page, playbackLine: session.playbackLine)
                     .padding(.horizontal, 40)
                     .padding(.top, 40)
                     .padding(.bottom, 110)
@@ -118,13 +119,14 @@ struct StaffMelodyEngravingBackground: View {
 /// identically — no light "print card", white ink on the dark background.
 struct StaffMelodyPageContent: View {
     let page: StaffMelodyPage
+    var playbackLine: PlaybackLine? = nil
 
     var body: some View {
         switch page {
         case .empty:
             emptyState
         case .ready(let html):
-            VerovioScoreView(html: html)
+            VerovioScoreView(html: html, playbackLine: playbackLine)
         case .failed(let message):
             messageState(message)
         }
@@ -155,6 +157,7 @@ struct StaffMelodyPageContent: View {
 /// Score Rendering adapter: hosts bundled Verovio and loads a Staff Melody Page.
 private struct VerovioScoreView: NSViewRepresentable {
     let html: String
+    var playbackLine: PlaybackLine?
 
     func makeNSView(context: Context) -> WKWebView {
         // drawsBackground must be set on the configuration *before* init;
@@ -166,11 +169,16 @@ private struct VerovioScoreView: NSViewRepresentable {
         webView.underPageBackgroundColor = .clear
         webView.wantsLayer = true
         webView.layer?.backgroundColor = NSColor.clear.cgColor
+        webView.navigationDelegate = context.coordinator
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        guard context.coordinator.lastHTML != html else { return }
+        context.coordinator.playbackLine = playbackLine
+        if context.coordinator.lastHTML == html {
+            context.coordinator.pushLine(on: webView)
+            return
+        }
         context.coordinator.lastHTML = html
 
         do {
@@ -189,9 +197,33 @@ private struct VerovioScoreView: NSViewRepresentable {
         Coordinator()
     }
 
-    final class Coordinator {
+    final class Coordinator: NSObject, WKNavigationDelegate {
         var lastHTML: String?
+        var playbackLine: PlaybackLine?
         private var pageDirectory: URL?
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            pushLine(on: webView)
+        }
+
+        func pushLine(on webView: WKWebView) {
+            let script: String
+            if let playbackLine {
+                script = """
+                if (window.placePlaybackLine) {
+                  window.placePlaybackLine(\(playbackLine.eventIndex), \(playbackLine.fractionThroughEvent));
+                } else {
+                  window.pendingPlaybackLine = [\(playbackLine.eventIndex), \(playbackLine.fractionThroughEvent)];
+                }
+                """
+            } else {
+                script = """
+                if (window.placePlaybackLine) { window.placePlaybackLine(-1, 0); }
+                window.pendingPlaybackLine = [-1, 0];
+                """
+            }
+            webView.evaluateJavaScript(script, completionHandler: nil)
+        }
 
         func replacePageDirectory(_ directory: URL) {
             if let pageDirectory {

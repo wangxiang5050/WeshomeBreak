@@ -17,7 +17,7 @@ A pluggable visual presentation shown on the Rest Overlay during a break.
 _Avoid_: effect, theme, screensaver (unless clearly metaphorical)
 
 **Staff Melody Scene**:
-The break scene mode that shows a readable, musically correct staff notation of a **User Melody** so the user can hum along while resting.
+The break scene mode that shows a readable, musically correct staff notation of a **User Melody** so the user can hum along while resting. Melody Playback can sound that same melody during the rest.
 _Avoid_: staff-notes decoration, random phrase, ambient notes (those describe the superseded decorative behavior)
 
 **Staff Melody Page**:
@@ -28,12 +28,24 @@ _Avoid_: StaffMelodyContent, resolver output, engraving prep (those were shallow
 A melody the user provides for display on the Staff Melody Scene. Each melody has a stable identity. Imported notation does not change afterward; the title may. Importing the same file again creates a new melody. A melody whose notation file cannot be read is still in the library. Product-bundled melodies are not a required content source.
 _Avoid_: song (implies lyrics/arrangement), track, random phrase
 
+**Melody Playback**:
+Sounding one User Melody as piano from its stored notation: pitches, durations, repeat signs, dynamics, and the articulations that change how a note is attacked or held, each in its usual musical sense.
+_Avoid_: 乐谱播放, full-score playback, Break Cycle pause
+
+**Playback Tempo**:
+How fast Melody Playback goes. Chosen in Settings from common tempos, not taken from the stored notation.
+_Avoid_: score metronome mark, Staff Notation Scale, Duration Proportion
+
+**Playback Position**:
+The place Melody Playback will sound from in the User Melody. Pause keeps it. Closing the Rest Overlay discards it.
+_Avoid_: break countdown, remaining time
+
 **Melody Entry**:
 The process of getting a User Melody into the app. Phase 1 is offline conversion into a stored score file, then import through the app. A file placed in the library folder by hand is not a melody and does not skip the import gate. Later phases may add in-app image capture.
 _Avoid_: OCR-only wording when the phase is still manual/tool-assisted import; treating the library folder as a drop folder
 
 **Staff Melody (v1 scope)**:
-A monophonic staff excerpt intended to fit roughly 4–8 measures (more than 8 is allowed with a warning). Includes clef (treble or bass, including mid-excerpt clef/key changes), time signature, key signature, pitches with accidentals, durations (including dotted values), common triplets, rests, barlines, beams, and ties. No polyphony, chords, lyrics, slurs, nested tuplets, or non-triplet tuplet ratios. Import accepts only a single part and a single voice; files outside this subset are rejected entirely.
+A monophonic staff excerpt intended to fit roughly 4–8 measures (more than 8 is allowed with a warning). Includes clef (treble or bass, including mid-excerpt clef/key changes), time signature, key signature, pitches with accidentals, durations (including dotted values), common triplets, rests, barlines, beams, ties, repeat signs, dynamics, and articulations that change attack or duration (staccato, accent, tenuto, fermata). No polyphony, chords, lyrics, slurs, nested tuplets, or non-triplet tuplet ratios. Import accepts only a single part and a single voice; files outside this subset are rejected entirely.
 _Avoid_: full score, arrangement, song sheet
 
 **Beam (连梁)**:
@@ -85,7 +97,7 @@ How closely horizontal space follows note duration (as a percent, 5–100; defau
 _Avoid_: even note spacing, equal bar width, notehead size, Spacing Coefficient, 疏密系数
 
 **Settings**:
-The owner's configuration surface: launch, work/rest durations, skip and delay, Scene Mode Selection, and the Melody Library (including Staff Notation Scale and Duration Proportion). Not Melody Preview, and not the Rest Overlay. Its size is not Staff Notation Scale.
+The owner's configuration surface: launch, work/rest durations, skip and delay, Scene Mode Selection, Playback Tempo, and the Melody Library (including Staff Notation Scale and Duration Proportion). Not Melody Preview, and not the Rest Overlay. Its size is not Staff Notation Scale.
 _Avoid_: 界面, preferences (when that means Melody Preview)
 
 **Melody Preview**:

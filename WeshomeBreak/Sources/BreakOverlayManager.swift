@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import GrillBreakCore
 import SwiftUI
 
@@ -19,6 +20,10 @@ final class BreakOverlayManager: RestOverlayWindows {
     private var windows: [NSWindow] = []
 
     private var sceneSession: BreakSceneSession?
+    private var playbackTimer: Timer?
+    private var playbackWatch: AnyCancellable?
+    private var lastOutput: PlaybackOutput?
+    private let piano = PianoOutput()
 
     init(breakCycle: BreakCycle, settingsStore: BreakSettingsStore) {
         self.breakCycle = breakCycle
@@ -35,6 +40,8 @@ final class BreakOverlayManager: RestOverlayWindows {
 
         let session = sceneMode.makeSession()
         sceneSession = session
+        watchPlayback(of: session)
+        startPlaybackClock()
         windows = NSScreen.screens.map { screen in
             makeWindow(for: screen, sceneMode: sceneMode, sceneSession: session)
         }
@@ -43,9 +50,40 @@ final class BreakOverlayManager: RestOverlayWindows {
 
     /// Closes and releases every overlay window currently shown.
     func dismiss() {
+        playbackTimer?.invalidate()
+        playbackTimer = nil
+        sceneSession?.dismissPlayback()
         windows.forEach { $0.close() }
         windows.removeAll()
+        playbackWatch = nil
+        lastOutput = nil
+        piano.stop()
         sceneSession = nil
+    }
+
+    private func watchPlayback(of session: BreakSceneSession) {
+        playbackWatch = session.$playbackSound.sink { [piano] moment in
+            piano.render(moment)
+        }
+    }
+
+    private func startPlaybackClock() {
+        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.tickPlayback()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        playbackTimer = timer
+    }
+
+    private func tickPlayback() {
+        let output = PlaybackOutputSense.current()
+        if output != lastOutput {
+            lastOutput = output
+            sceneSession?.notePlaybackOutput(output)
+        }
+        sceneSession?.tickPlayback(seconds: 1.0 / 30)
     }
 
     private func makeWindow(

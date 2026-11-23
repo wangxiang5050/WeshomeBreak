@@ -69,6 +69,11 @@ enum StaffMelodyEngravingPage {
             #notation svg [stroke]:not([stroke="none"]) {
               stroke: #ffffff !important;
             }
+            #playback-line {
+              stroke: #7eb6ff !important;
+              fill: none !important;
+              stroke-width: 2px;
+            }
             #status {
               font: 18px -apple-system, sans-serif;
               color: rgba(255, 255, 255, 0.55);
@@ -95,6 +100,7 @@ enum StaffMelodyEngravingPage {
                 // Also set attributes: CSS covers most cases; this catches
                 // bare <use> glyphs that otherwise inherit SVG default black.
                 svg.querySelectorAll("*").forEach((el) => {
+                  if (el.id === "playback-line") return;
                   const fill = el.getAttribute("fill");
                   if (fill !== "none" && fill !== "transparent") {
                     el.setAttribute("fill", "#ffffff");
@@ -135,6 +141,39 @@ enum StaffMelodyEngravingPage {
                   const notation = document.getElementById("notation");
                   notation.innerHTML = tk.renderToSVG(1);
                   applyWhiteInk(notation);
+                  window.placePlaybackLine = function (eventIndex, fraction) {
+                    const svg = notation.querySelector("svg");
+                    if (!svg) return;
+                    let line = svg.querySelector("#playback-line");
+                    if (eventIndex < 0) {
+                      if (line) line.remove();
+                      return;
+                    }
+                    const events = Array.from(svg.querySelectorAll("g.note, g.rest"));
+                    const event = events[eventIndex];
+                    if (!event) return;
+                    const box = event.getBBox();
+                    const next = events[eventIndex + 1];
+                    const nextBox = next ? next.getBBox() : null;
+                    const nextX = nextBox && nextBox.x > box.x
+                      ? nextBox.x
+                      : box.x + Math.max(box.width, 40);
+                    const x = box.x + (nextX - box.x) * Math.min(1, Math.max(0, fraction));
+                    const staff = event.closest("g.staff") || svg;
+                    const staffBox = staff.getBBox();
+                    if (!line) {
+                      line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                      line.id = "playback-line";
+                      svg.appendChild(line);
+                    }
+                    line.setAttribute("x1", x);
+                    line.setAttribute("x2", x);
+                    line.setAttribute("y1", staffBox.y);
+                    line.setAttribute("y2", staffBox.y + staffBox.height);
+                  };
+                  if (window.pendingPlaybackLine) {
+                    window.placePlaybackLine(window.pendingPlaybackLine[0], window.pendingPlaybackLine[1]);
+                  }
                 } catch (error) {
                   document.getElementById("notation").innerHTML =
                     "<div id='status'>谱面渲染失败</div>";

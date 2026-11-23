@@ -45,6 +45,7 @@ struct BreakOverlayView: View {
 
     private var showsHoverBar: Bool {
         sceneSession.hoverBarExtraTitle != nil
+            || sceneSession.hoverBarSymbolName != nil
             || settingsStore.allowSkip
             || settingsStore.allowDelay
     }
@@ -76,6 +77,13 @@ struct BreakOverlayView: View {
 
     private var controlBar: some View {
         HStack(spacing: 16) {
+            if let symbol = sceneSession.hoverBarSymbolName {
+                Button {
+                    sceneSession.performHoverBarSymbol()
+                } label: {
+                    Image(systemName: symbol)
+                }
+            }
             if let title = sceneSession.hoverBarExtraTitle {
                 Button(title) {
                     sceneSession.performHoverBarExtra()

@@ -156,6 +156,95 @@ struct StaffMelodySceneSessionTests {
         #expect(session.page == .empty)
         #expect(selection.lastShownMelodyID == UUID(uuidString: "00000000-0000-0000-0000-00000000000A")!)
     }
+
+    @Test("a ready melody offers one play icon and hiding the staff keeps the sound")
+    func playbackIconFollowsTheMelodyAndHidesOnlyTheLine() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("staff-playback-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = MelodyLibrary(rootDirectory: root)
+        guard case .imported(let melody, _) = library.importMusicXML(MusicXMLFixtures.simpleFourMeasures) else {
+            Issue.record("expected a melody")
+            return
+        }
+        let session = StaffMelodySceneSession()
+        session.beginRest(
+            in: library,
+            using: .manual(melodyID: melody.id),
+            continuingSameRest: false,
+            selection: MelodySelectionState(randomIndex: { _ in 0 }),
+            scalePercent: 60,
+            durationProportionPercent: 60,
+            tempo: .lento
+        )
+
+        #expect(session.hoverBarSymbolName == "play.fill")
+        #expect(session.playbackLine == nil)
+
+        session.performHoverBarSymbol()
+        #expect(session.hoverBarSymbolName == "pause.fill")
+        #expect(session.playbackLine == PlaybackLine(eventIndex: 0, fractionThroughEvent: 0))
+        #expect(session.playbackMoment.attacks.first?.midi == 60)
+
+        session.performHoverBarExtra()
+        #expect(!session.showsContent)
+        #expect(session.hoverBarSymbolName == "pause.fill")
+        #expect(session.playbackLine == nil)
+        #expect(session.playbackMoment.phase == .playing)
+
+        session.performHoverBarExtra()
+        #expect(session.playbackLine != nil)
+    }
+
+    @Test("replacing the melody stops playback at the start of the new one")
+    func replacingTheMelodyStopsPlayback() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("staff-playback-replace-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let library = MelodyLibrary(rootDirectory: root)
+        guard case .imported(let held, _) = library.importMusicXML(MusicXMLFixtures.simpleFourMeasures) else {
+            Issue.record("expected the held melody")
+            return
+        }
+        guard case .imported = library.importMusicXML(MusicXMLFixtures.twoMeasures) else {
+            Issue.record("expected the replacement")
+            return
+        }
+        let selection = MelodySelectionState(randomIndex: { _ in 0 })
+        let session = StaffMelodySceneSession()
+        session.beginRest(
+            in: library,
+            using: .manual(melodyID: held.id),
+            continuingSameRest: false,
+            selection: selection,
+            scalePercent: 60,
+            durationProportionPercent: 60
+        )
+        session.performHoverBarSymbol()
+        try library.delete(id: held.id)
+        session.libraryChanged(in: library)
+
+        #expect(session.hoverBarSymbolName == "play.fill")
+        #expect(session.playbackMoment.phase == .idle)
+        #expect(session.playbackMoment.silenced)
+    }
+
+    @Test("an empty rest has no playback icon")
+    func emptyRestHasNoPlaybackIcon() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("staff-playback-empty-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let session = StaffMelodySceneSession()
+        session.beginRest(
+            in: MelodyLibrary(rootDirectory: root),
+            using: .manual(melodyID: nil),
+            continuingSameRest: false,
+            selection: MelodySelectionState(randomIndex: { _ in 0 }),
+            scalePercent: 60,
+            durationProportionPercent: 60
+        )
+        #expect(session.hoverBarSymbolName == nil)
+    }
 }
 
 @Suite("BreakSceneSession")

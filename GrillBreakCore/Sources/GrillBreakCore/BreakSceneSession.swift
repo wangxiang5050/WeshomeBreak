@@ -9,6 +9,9 @@ public class BreakSceneSession: ObservableObject {
     /// Extra hover-bar button owned by this scene. `nil` means none.
     public var hoverBarExtraTitle: String? { nil }
 
+    /// Icon button owned by this scene. `nil` means none.
+    public var hoverBarSymbolName: String? { nil }
+
     /// Whether this scene's content area is shown. Overlay does not read this;
     /// the scene view does.
     public var showsContent: Bool { true }
@@ -16,6 +19,27 @@ public class BreakSceneSession: ObservableObject {
     public init() {}
 
     public func performHoverBarExtra() {}
+
+    public func performHoverBarSymbol() {}
+
+    public func tickPlayback(seconds: TimeInterval) {}
+
+    public func dismissPlayback() {}
+
+    public func notePlaybackOutput(_ output: PlaybackOutput) {}
+
+    fileprivate func publishPlayback(_ moment: MelodyPlaybackMoment) {
+        playbackSound = moment
+    }
+
+    /// Latest notes the scene wants sounded. Empty until a scene publishes some.
+    @Published public private(set) var playbackSound = MelodyPlaybackMoment(
+        phase: .idle,
+        offersStart: false,
+        attacks: [],
+        silenced: false,
+        line: nil
+    )
 }
 
 /// Staff Melody Scene chrome for one break: session-scoped Visibility,
@@ -33,9 +57,15 @@ public final class StaffMelodySceneSession: BreakSceneSession {
 
     @Published private var visibility = StaffMelodyVisibility()
 
+    /// Same moment the overlay sounds. Tests read this name.
+    public var playbackMoment: MelodyPlaybackMoment { playbackSound }
+
+    private var loadedMusicXML: String?
     private var selection: MelodySelectionState?
     private var scalePercent = 60
     private var durationProportionPercent = 60
+    private var tempo = PlaybackTempo.defaultTempo
+    private var playback = MelodyPlayback(musicXML: nil, tempo: .defaultTempo)
 
     public init(melodyID: UUID? = nil) {
         self.melodyID = melodyID
@@ -50,11 +80,13 @@ public final class StaffMelodySceneSession: BreakSceneSession {
         continuingSameRest: Bool,
         selection: MelodySelectionState,
         scalePercent: Int,
-        durationProportionPercent: Int
+        durationProportionPercent: Int,
+        tempo: PlaybackTempo = .defaultTempo
     ) {
         self.selection = selection
         self.scalePercent = scalePercent
         self.durationProportionPercent = durationProportionPercent
+        self.tempo = tempo
         let melody = selection.beginPresentation(
             melodies: library.melodies(),
             using: strategy,
@@ -73,6 +105,10 @@ public final class StaffMelodySceneSession: BreakSceneSession {
             using: .randomNoRepeat,
             continuingSameRest: true
         )
+        if melody?.id == melodyID, case .ready = page {
+            let xml = melodyID.flatMap { try? library.musicXML(for: $0) }
+            if xml == loadedMusicXML { return }
+        }
         show(melody, in: library)
     }
 
@@ -84,14 +120,58 @@ public final class StaffMelodySceneSession: BreakSceneSession {
             scalePercent: scalePercent,
             durationProportionPercent: durationProportionPercent
         )
+        let musicXML: String?
+        if case .ready = page, let melodyID {
+            musicXML = try? library.musicXML(for: melodyID)
+        } else {
+            musicXML = nil
+        }
+        if playback.tempo != tempo {
+            playback = MelodyPlayback(musicXML: nil, tempo: tempo)
+        }
+        loadedMusicXML = musicXML
+        publishPlayback(playback.replace(musicXML: musicXML))
+    }
+
+    /// Line for the engraved staff. Hidden with the melody, including while sound continues.
+    public var playbackLine: PlaybackLine? {
+        guard showsContent else { return nil }
+        return playbackMoment.line
     }
 
     public override var hoverBarExtraTitle: String? { visibility.toggleTitle }
     public override var showsContent: Bool { visibility.isContentVisible }
 
+    public override var hoverBarSymbolName: String? {
+        guard playback.isAvailable, case .ready = page else { return nil }
+        return playbackMoment.offersStart ? "play.fill" : "pause.fill"
+    }
+
     public override func performHoverBarExtra() {
         objectWillChange.send()
         visibility.toggle()
+    }
+
+    public override func performHoverBarSymbol() {
+        publishPlayback(playbackMoment.offersStart ? playback.start() : playback.pause())
+    }
+
+    public override func tickPlayback(seconds: TimeInterval) {
+        let next = playback.advance(seconds: seconds)
+        if next != playbackSound {
+            publishPlayback(next)
+        }
+    }
+
+    public override func dismissPlayback() {
+        publishPlayback(playback.dismiss())
+    }
+
+    public override func notePlaybackOutput(_ output: PlaybackOutput) {
+        let next = playback.noteOutput(output)
+        if next != playbackSound {
+            publishPlayback(next)
+        }
     }
 }
 

@@ -9,7 +9,7 @@ A macOS menu-bar app that enforces configurable work/break cycles with a full-sc
 - Menu-bar only (no Dock icon, no standalone main window)
 - Simple work/break cycle scheduling with configurable durations (defaults: 20 / 5 minutes)
 - Full-screen break overlay on every connected display when a break is due
-- **Staff Melody Scene**: import MusicXML and engrave a readable monophonic staff with Verovio for humming while resting (visual only, no audio)
+- **Staff Melody Scene**: import MusicXML and engrave a readable monophonic staff with Verovio for humming while resting; optional piano playback of that melody (see `docs/adr/0004-melody-playback.md`)
 - Skip or snooze the current break from the overlay; pause/resume, trigger a break, and open Settings from the menu bar
 - Optional launch at login; settings persist (timer state is not restored across process restarts)
 

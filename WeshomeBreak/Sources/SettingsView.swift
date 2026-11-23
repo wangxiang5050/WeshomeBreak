@@ -154,6 +154,11 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                Picker("播放速度", selection: $settingsStore.playbackTempo) {
+                    ForEach(PlaybackTempo.allCases, id: \.self) { tempo in
+                        Text(tempo.settingsTitle).tag(tempo)
+                    }
+                }
                 staffNotationScaleRow
                 durationProportionRow
 

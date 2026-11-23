@@ -29,6 +29,7 @@ final class BreakSettingsStore: ObservableObject {
         static let staffNotationScalePercent = "settings.staffNotationScalePercent"
         static let durationProportionPercent = "settings.durationProportionPercent"
         static let randomMelodyEnabled = "settings.randomMelodyEnabled"
+        static let playbackTempo = "settings.playbackTempo"
         static let launchAtLogin = "settings.launchAtLogin"
     }
 
@@ -110,6 +111,11 @@ final class BreakSettingsStore: ObservableObject {
         didSet { persist(randomMelodyEnabled, forKey: Keys.randomMelodyEnabled) }
     }
 
+    /// Playback Tempo for every User Melody. Read when a rest's playback starts.
+    @Published var playbackTempo: PlaybackTempo {
+        didSet { persist(playbackTempo.rawValue, forKey: Keys.playbackTempo) }
+    }
+
     /// Login-item preference. Default on. `WeshomeBreakApp` applies this to
     /// `SMAppService` at launch and whenever the settings toggle changes.
     @Published var launchAtLogin: Bool {
@@ -132,6 +138,12 @@ final class BreakSettingsStore: ObservableObject {
         durationProportionPercent = (defaults.object(forKey: Keys.durationProportionPercent) as? Int)
             ?? Defaults.durationProportionPercent
         randomMelodyEnabled = (defaults.object(forKey: Keys.randomMelodyEnabled) as? Bool) ?? false
+        if let raw = defaults.object(forKey: Keys.playbackTempo) as? Int,
+           let tempo = PlaybackTempo(rawValue: raw) {
+            playbackTempo = tempo
+        } else {
+            playbackTempo = .defaultTempo
+        }
         // Missing key means the user has never chosen — spec default is on.
         // `bool(forKey:)` would treat that absence as false.
         launchAtLogin = (defaults.object(forKey: Keys.launchAtLogin) as? Bool) ?? true
