@@ -121,6 +121,6 @@
 ## Further Notes
 
 - 本 spec 由 `grill-me` 交互式访谈(grilling 会话)整理而成,访谈过程逐轮确认了产品形态、调度模型、遮罩交互、视觉细节、工程结构与分发方式等决策,详见对话历史。
-- 项目当前未配置任何外部 issue tracker(未检测到 GitHub/Linear 等集成,也没有 `setup-matt-pocock-skills` 的相关配置),因此本 spec 以本地 `spec.md` 文件形式产出,未发布到外部 issue tracker。若后续接入了 issue tracker,可将本文件内容直接迁移过去并补充 triage 标签。
+- 本文件是产品约定。实现工单在 `.scratch/weshome-break/issues/`（一份工单一文件）。
 - Staff Melody 相关术语与决策见根目录 `GLOSSARY.md`、`docs/adr/0001-musicxml-verovio-for-staff-melody.md`、外置录入说明 `docs/melody-entry.md`；相关 tickets: 06（展示模式协议）、11（MusicXML 门禁 + 旋律库模型）、12（Staff Melody Scene）、07（设置含旋律库 UI）。
 - 后续实现阶段建议先搭建 `GrillBreakCore` 包与调度器骨架并配好单元测试,再逐步接入 SwiftUI/AppKit 的菜单栏与遮罩窗口 UI,最后实现 Staff Melody Scene(MusicXML 门禁 + Verovio 展示 + 设置中的旋律库)。
