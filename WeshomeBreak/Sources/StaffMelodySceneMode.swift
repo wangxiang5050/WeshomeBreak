@@ -164,6 +164,9 @@ private struct VerovioScoreView: NSViewRepresentable {
         // setting it only on the instance leaves macOS WKWebView opaque white.
         let configuration = WKWebViewConfiguration()
         configuration.setValue(false, forKey: "drawsBackground")
+        if RestOverlayWitness.isEnabled {
+            configuration.userContentController.add(context.coordinator, name: RestOverlayWitness.messageName)
+        }
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.setValue(false, forKey: "drawsBackground")
         webView.underPageBackgroundColor = .clear
@@ -197,13 +200,21 @@ private struct VerovioScoreView: NSViewRepresentable {
         Coordinator()
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var lastHTML: String?
         var playbackLine: PlaybackLine?
         private var pageDirectory: URL?
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             pushLine(on: webView)
+        }
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            guard message.name == RestOverlayWitness.messageName, let json = message.body as? String else { return }
+            try? json.write(to: RestOverlayWitness.domRecordURL, atomically: true, encoding: .utf8)
         }
 
         func pushLine(on webView: WKWebView) {

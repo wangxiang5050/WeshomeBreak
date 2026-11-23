@@ -2,7 +2,11 @@ import Foundation
 
 /// Internal HTML builder for Staff Melody Page (transparent page + white ink).
 /// Callers use `StaffMelodyPage.prepare`; Verovio still runs in the app adapter.
+///
+/// Verovio 把每个音和休止刻成文档顺序的 `g.note` / `g.rest`，与 Melody Playback 的事件下标一致。竖线是 `#playback-line`，竖跨该事件所在的 `g.staff`。
 enum StaffMelodyEngravingPage {
+    static let playbackEventSelector = "g.note, g.rest"
+    static let playbackStaffSelector = "g.staff"
     /// The footprint at `scalePercent == 100`: Verovio's own `scale` option
     /// only changes the exported SVG's pixel dimensions, not the size of
     /// glyphs relative to that SVG — so once `#notation svg` is stretched to
@@ -147,11 +151,15 @@ enum StaffMelodyEngravingPage {
                     let line = svg.querySelector("#playback-line");
                     if (eventIndex < 0) {
                       if (line) line.remove();
+                      publishOverlayDom(eventIndex);
                       return;
                     }
-                    const events = Array.from(svg.querySelectorAll("g.note, g.rest"));
+                    const events = Array.from(svg.querySelectorAll("\(Self.playbackEventSelector)"));
                     const event = events[eventIndex];
-                    if (!event) return;
+                    if (!event) {
+                      publishOverlayDom(eventIndex);
+                      return;
+                    }
                     const box = event.getBBox();
                     const next = events[eventIndex + 1];
                     const nextBox = next ? next.getBBox() : null;
@@ -159,7 +167,7 @@ enum StaffMelodyEngravingPage {
                       ? nextBox.x
                       : box.x + Math.max(box.width, 40);
                     const x = box.x + (nextX - box.x) * Math.min(1, Math.max(0, fraction));
-                    const staff = event.closest("g.staff") || svg;
+                    const staff = event.closest("\(Self.playbackStaffSelector)") || svg;
                     const staffBox = staff.getBBox();
                     if (!line) {
                       line = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -170,7 +178,28 @@ enum StaffMelodyEngravingPage {
                     line.setAttribute("x2", x);
                     line.setAttribute("y1", staffBox.y);
                     line.setAttribute("y2", staffBox.y + staffBox.height);
+                    publishOverlayDom(eventIndex);
                   };
+                  function publishOverlayDom(eventIndex) {
+                    const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.overlayDom;
+                    if (!handler) return;
+                    const svg = notation.querySelector("svg");
+                    const events = svg ? Array.from(svg.querySelectorAll("\(Self.playbackEventSelector)")).map((el) => {
+                      const box = el.getBBox();
+                      return { className: el.getAttribute("class"), x: box.x, y: box.y, width: box.width, height: box.height };
+                    }) : [];
+                    const line = svg && svg.querySelector("#playback-line");
+                    handler.postMessage(JSON.stringify({
+                      eventIndex: eventIndex,
+                      events: events,
+                      playbackLine: line ? {
+                        x1: Number(line.getAttribute("x1")),
+                        y1: Number(line.getAttribute("y1")),
+                        x2: Number(line.getAttribute("x2")),
+                        y2: Number(line.getAttribute("y2"))
+                      } : null
+                    }));
+                  }
                   if (window.pendingPlaybackLine) {
                     window.placePlaybackLine(window.pendingPlaybackLine[0], window.pendingPlaybackLine[1]);
                   }

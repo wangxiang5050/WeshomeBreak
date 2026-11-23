@@ -45,9 +45,10 @@ export DEVELOPMENT_TEAM=<your-team-id>
 ```
 
 ```bash
-# Run GrillBreakCore unit tests
-cd GrillBreakCore
-swift test
+# Same gate as the pre-commit hook and CI: GrillBreakCore swift test, then one Debug app build
+./scripts/check.sh
+# Enable the pre-commit hook in a fresh clone (once)
+./scripts/install-git-hooks.sh
 ```
 
 ## Usage

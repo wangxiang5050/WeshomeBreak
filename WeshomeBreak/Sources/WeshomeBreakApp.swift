@@ -55,6 +55,9 @@ struct WeshomeBreakApp: App {
             )
         )
         restOverlay.start(observing: breakCycle)
+        if RestOverlayWitness.isEnabled {
+            breakCycle.startBreakNow()
+        }
         menuStatusTitleUpdater = MenuBarLiveStatusTitleUpdater(breakCycle: breakCycle)
         menuStatusTitleUpdater.start()
         loginLaunch.apply(enabled: settingsStore.launchAtLogin)

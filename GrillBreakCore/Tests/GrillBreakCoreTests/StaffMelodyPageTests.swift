@@ -144,6 +144,16 @@ struct StaffMelodyPageTests {
     }
 
     @Test
+    func playbackLineIndexesVerovioNotesAndRests() throws {
+        let html = try readyHTML(from: MusicXMLFixtures.simpleFourMeasures)
+
+        #expect(html.contains("querySelectorAll(\"\(StaffMelodyEngravingPage.playbackEventSelector)\")"))
+        #expect(html.contains("closest(\"\(StaffMelodyEngravingPage.playbackStaffSelector)\")"))
+        #expect(html.contains("line.id = \"playback-line\""))
+        #expect(html.contains("overlayDom"))
+    }
+
+    @Test
     func readyForcesWhiteNotationInk() throws {
         let html = try readyHTML(from: MusicXMLFixtures.simpleFourMeasures)
 

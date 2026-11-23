@@ -45,9 +45,10 @@ export DEVELOPMENT_TEAM=<your-team-id>
 ```
 
 ```bash
-# 运行 GrillBreakCore 单元测试
-cd GrillBreakCore
-swift test
+# 与提交前钩子、CI 相同：GrillBreakCore 的 swift test，再编一次 Debug 应用
+./scripts/check.sh
+# 新克隆启用提交前钩子（只需一次）
+./scripts/install-git-hooks.sh
 ```
 
 ## 使用要点
